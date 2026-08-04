@@ -1,0 +1,24 @@
+# NetBeans build artifacts
+/build/
+/dist/
+/nbproject/private/
+/nbproject/private/private.properties
+/nbproject/private/private.xml
+
+# Compiled Java class files
+*.class
+*.jar
+*.war
+*.ear
+
+# IDE and Editor settings
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# OS temporary files
+.DS_Store
+Thumbs.db
+desktop.ini
