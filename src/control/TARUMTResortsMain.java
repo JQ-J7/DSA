@@ -16,6 +16,7 @@ public class TARUMTResortsMain {
 
     private MainSystemUI mainUI = new MainSystemUI();
     private HousekeepingControl housekeepingControl = new HousekeepingControl();
+    private FrontDeskController frontDeskController = new FrontDeskController();
 
     public void runMainSystem() {
         int choice;
@@ -26,7 +27,7 @@ public class TARUMTResortsMain {
                     mainUI.displayTeammateModuleNotice("Walk-In Registrations & Standard Booking Procedure");
                     break;
                 case 2:
-                    mainUI.displayTeammateModuleNotice("Front-Desk Service & Guest Inquiries");
+                    frontDeskController.run();
                     break;
                 case 3:
                     // Launches User's Housekeeping and Task Log Subsystem
