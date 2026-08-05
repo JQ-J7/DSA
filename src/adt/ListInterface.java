@@ -1,1 +1,89 @@
-package adt;/** * @author Frank M. Carrano * @version 2.0 */public interface ListInterface<T> {  /**   * Task: Adds a new entry to the end of the list. Entries currently in the   * list are unaffected. The list's size is increased by 1.   *   * @param newEntry the object to be added as a new entry   * @return true if the addition is successful, or false if the list is full   */  public boolean add(T newEntry);  /**   * Task: Adds a new entry at a specified position within the list. Entries   * originally at and above the specified position are at the next higher   * position within the list. The list's size is increased by 1.   *   * @param newPosition an integer that specifies the desired position of the   * new entry   * @param newEntry the object to be added as a new entry   * @return true if the addition is successful, or false if either the list is   * full, newPosition < 1, or   *          newPosition > getNumberOfEntries()+1   */  public boolean add(int newPosition, T newEntry);  /**   * Task: Removes the entry at a given position from the list. Entries   * originally at positions higher than the given position are at the next   * lower position within the list, and the list's size is decreased by 1.   *   * @param givenPosition an integer that indicates the position of the entry to   * be removed   * @return a reference to the removed entry or null, if either the list was   * empty, givenPosition < 1, or   *          givenPosition > getNumberOfEntries()   */  public T remove(int givenPosition);  /**   * Task: Removes all entries from the list.   */  public void clear();  /**   * Task: Replaces the entry at a given position in the list.   *   * @param givenPosition an integer that indicates the position of the entry to   * be replaced   * @param newEntry the object that will replace the entry at the position   * givenPosition   * @return true if the replacement occurs, or false if either the list is   * empty, givenPosition < 1, or givenPosition > getNumberOfEntries()   */  public boolean replace(int givenPosition, T newEntry);  /**   * Task: Retrieves the entry at a given position in the list.   *   * @param givenPosition an integer that indicates the position of the desired   * entry   * @return a reference to the indicated entry or null, if either the list is   * empty, givenPosition < 1, or givenPosition > getNumberOfEntries()   */  public T getEntry(int givenPosition);  /**   * Task: Sees whether the list contains a given entry.   *   * @param anEntry the object that is the desired entry   * @return true if the list contains anEntry, or false if not   */  public boolean contains(T anEntry);  /**   * Task: Gets the number of entries in the list.   *   * @return the integer number of entries currently in the list   */  public int getNumberOfEntries();  /**   * Task: Sees whether the list is empty.   *   * @return true if the list is empty, or false if not   */  public boolean isEmpty();  /**   * Task: Sees whether the list is full.   *   * @return true if the list is full, or false if not   */  public boolean isFull();}
+package adt;
+
+/**
+ * Interface for a List Abstract Data Type (ADT).
+ * Provides operations to store, manipulate, and access an ordered collection of elements.
+ * 
+ * @author Tan Jun Qi
+ * @param <T> Data type of elements stored in the list
+ */
+public interface ListInterface<T> {
+
+    /**
+     * Adds a new entry to the end of this list.
+     * 
+     * @param newEntry The object to be added as a new entry.
+     * @return True if addition is successful, false otherwise.
+     */
+    boolean add(T newEntry);
+
+    /**
+     * Adds a new entry at a specified position within this list.
+     * Entries at or above the specified position are shifted to the next higher position.
+     * 
+     * @param newPosition An integer specifying the desired position (1-indexed).
+     * @param newEntry The object to be added as a new entry.
+     * @return True if addition is successful, false if position is invalid or list is full.
+     */
+    boolean add(int newPosition, T newEntry);
+
+    /**
+     * Removes the entry at a given position from this list.
+     * Entries at higher positions are shifted down to lower positions.
+     * 
+     * @param givenPosition An integer indicating the position of the entry to remove (1-indexed).
+     * @return The removed entry, or null if the position is invalid or list is empty.
+     */
+    T remove(int givenPosition);
+
+    /**
+     * Removes all entries from this list.
+     */
+    void clear();
+
+    /**
+     * Replaces the entry at a given position in this list with a new entry.
+     * 
+     * @param givenPosition An integer indicating the position of the entry to replace (1-indexed).
+     * @param newEntry The object to replace the existing entry.
+     * @return True if replacement occurs, false if position is invalid.
+     */
+    boolean replace(int givenPosition, T newEntry);
+
+    /**
+     * Retrieves the entry at a given position in this list.
+     * 
+     * @param givenPosition An integer indicating the position of the desired entry (1-indexed).
+     * @return The entry at the specified position, or null if position is invalid.
+     */
+    T getEntry(int givenPosition);
+
+    /**
+     * Checks whether this list contains a given entry.
+     * 
+     * @param anEntry The object to search for in the list.
+     * @return True if the list contains the entry, false otherwise.
+     */
+    boolean contains(T anEntry);
+
+    /**
+     * Gets the number of entries currently in this list.
+     * 
+     * @return The integer count of entries in the list.
+     */
+    int getNumberOfEntries();
+
+    /**
+     * Checks whether this list is empty.
+     * 
+     * @return True if the list contains no entries, false otherwise.
+     */
+    boolean isEmpty();
+
+    /**
+     * Checks whether this list is full.
+     * 
+     * @return True if the list cannot accept more entries, false otherwise.
+     */
+    boolean isFull();
+}

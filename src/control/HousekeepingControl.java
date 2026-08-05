@@ -480,9 +480,4 @@ public class HousekeepingControl {
         }
         return null;
     }
-
-    public static void main(String[] args) {
-        HousekeepingControl control = new HousekeepingControl();
-        control.runHousekeepingSystem();
-    }
 }

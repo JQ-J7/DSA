@@ -1,8 +1,10 @@
 package adt;
 
 /**
- * @author Frank M. Carrano
- * @version 2.0
+ * Array-based implementation of the ListInterface ADT.
+ * 
+ * @author Tan Jun Qi
+ * @param <T> Data type of elements stored in the list
  */
 
 import java.io.Serializable;
@@ -146,29 +148,21 @@ public class ArrayList<T> implements ListInterface<T>, Serializable {
   }
 
   /**
-   * Task: Makes room for a new entry at newPosition. Precondition: 1 <=
-   * newPosition <= numberOfEntries + 1; numberOfEntries is array's
-   * numberOfEntries before addition.
+   * Shifts elements to make room for inserting a new entry at newPosition.
    */
   private void makeRoom(int newPosition) {
     int newIndex = newPosition - 1;
     int lastIndex = numberOfEntries - 1;
 
-    // move each entry to next higher index, starting at end of
-    // array and continuing until the entry at newIndex is moved
     for (int index = lastIndex; index >= newIndex; index--) {
       array[index + 1] = array[index];
     }
   }
 
   /**
-   * Task: Shifts entries that are beyond the entry to be removed to the next
-   * lower position. Precondition: array is not empty; 1 <= givenPosition <
-   * numberOfEntries; numberOfEntries is array's numberOfEntries before removal.
+   * Shifts elements to close the gap after removing an entry at givenPosition.
    */
   private void removeGap(int givenPosition) {
-    // move each entry to next lower position starting at entry after the
-    // one removed and continuing until end of array
     int removedIndex = givenPosition - 1;
     int lastIndex = numberOfEntries - 1;
 
