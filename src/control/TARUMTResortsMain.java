@@ -15,6 +15,7 @@ import utility.MessageUI;
 public class TARUMTResortsMain {
 
     private MainSystemUI mainUI = new MainSystemUI();
+    private WalkInBookingControl walkInControl = new WalkInBookingControl();
     private HousekeepingControl housekeepingControl = new HousekeepingControl();
     private FrontDeskController frontDeskController = new FrontDeskController();
 
@@ -24,7 +25,7 @@ public class TARUMTResortsMain {
             choice = mainUI.getMainSystemMenuChoice();
             switch (choice) {
                 case 1:
-                    mainUI.displayTeammateModuleNotice("Walk-In Registrations & Standard Booking Procedure");
+                    walkInControl.runWalkInBookingSystem();
                     break;
                 case 2:
                     frontDeskController.run();

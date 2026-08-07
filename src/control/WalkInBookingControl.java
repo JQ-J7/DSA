@@ -1,0 +1,647 @@
+package control;
+
+import adt.ArrayList;
+import adt.LinkedQueue;
+import adt.ListInterface;
+import adt.QueueInterface;
+import boundary.WalkInBookingUI;
+import dao.HousekeepingDAO;
+import dao.WalkInBookingDAO;
+import entity.Guest;
+import entity.Room;
+import entity.WalkInBooking;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
+/**
+ * Controller class for Walk-In Registrations & Standard Booking Procedure.
+ * Manages chronological arrivals using custom Linear Queue ADT (`LinkedQueue`).
+ * Adheres strictly to ECB architecture constraints.
+ * 
+ * @author Walk-In Subsystem Lead
+ */
+public class WalkInBookingControl {
+
+    private QueueInterface<WalkInBooking> waitingQueue = new LinkedQueue<>();
+    private ListInterface<WalkInBooking> allBookings = new ArrayList<>();
+    private ListInterface<Room> roomList = new ArrayList<>();
+
+    private WalkInBookingDAO bookingDAO = new WalkInBookingDAO();
+    private HousekeepingDAO housekeepingDAO = new HousekeepingDAO();
+    private WalkInBookingUI ui = new WalkInBookingUI();
+
+    private DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private int nextBookingIdSuffix = 1001;
+
+    public WalkInBookingControl() {
+        // Load persistent data
+        allBookings = bookingDAO.retrieveBookingsFromFile();
+        roomList = housekeepingDAO.retrieveRoomsFromFile();
+
+        if (roomList.isEmpty()) {
+            initDefaultRooms();
+        }
+
+        if (allBookings.isEmpty()) {
+            initDemoData();
+        } else {
+            rebuildWaitingQueue();
+        }
+    }
+
+    private void initDefaultRooms() {
+        roomList.add(new Room("R101", "Standard", 1, "Ready for Check-In", "ST101"));
+        roomList.add(new Room("R102", "Standard", 1, "Ready for Check-In", "ST102"));
+        roomList.add(new Room("R201", "Deluxe", 2, "Ready for Check-In", "ST101"));
+        roomList.add(new Room("R202", "Deluxe", 2, "Dirty", "ST103"));
+        roomList.add(new Room("R301", "Suite", 3, "Ready for Check-In", "ST104"));
+        housekeepingDAO.saveRoomsToFile(roomList);
+    }
+
+    private void initDemoData() {
+        String t1 = LocalDateTime.now().minusHours(3).format(dtf);
+        String t2 = LocalDateTime.now().minusHours(2).format(dtf);
+        String t3 = LocalDateTime.now().minusHours(1).format(dtf);
+
+        Guest g1 = new Guest("980512-14-6677", "Tan Ah Kow", "012-1113333");
+        Guest g2 = new Guest("000315-10-8899", "Sarah Lee", "017-8889999");
+        Guest g3 = new Guest("921104-08-1234", "David Muthu", "019-4445555");
+        Guest g4 = new Guest("850920-01-5432", "Jessica Wong", "016-3332222");
+
+        WalkInBooking b1 = new WalkInBooking("WB1001", g1, "Standard", 2, 200.00, t1, "Walk-In", "WAITING");
+        WalkInBooking b2 = new WalkInBooking("WB1002", g2, "Deluxe", 3, 350.00, t2, "Standard Advance", "WAITING");
+        WalkInBooking b3 = new WalkInBooking("WB1003", g3, "Suite", 1, 600.00, t3, "Walk-In", "WAITING");
+        WalkInBooking b4 = new WalkInBooking("WB1004", g4, "Standard", 4, 200.00, t3, "Standard Advance", "WAITING");
+
+        allBookings.add(b1);
+        allBookings.add(b2);
+        allBookings.add(b3);
+        allBookings.add(b4);
+
+        nextBookingIdSuffix = 1005;
+
+        bookingDAO.saveBookingsToFile(allBookings);
+        rebuildWaitingQueue();
+    }
+
+    private void rebuildWaitingQueue() {
+        waitingQueue.clear();
+        for (int i = 1; i <= allBookings.getNumberOfEntries(); i++) {
+            WalkInBooking b = allBookings.getEntry(i);
+            if ("WAITING".equalsIgnoreCase(b.getStatus())) {
+                waitingQueue.enqueue(b);
+            }
+        }
+    }
+
+    public void runWalkInBookingSystem() {
+        int choice;
+        do {
+            choice = ui.getMenuChoice();
+            switch (choice) {
+                case 1:
+                    registerNewBooking();
+                    break;
+                case 2:
+                    viewWaitingQueue();
+                    break;
+                case 3:
+                    allocateRoomToNextGuest();
+                    break;
+                case 4:
+                    cancelOrModifyBooking();
+                    break;
+                case 5:
+                    searchBookings();
+                    break;
+                case 6:
+                    generateQueueEfficiencyReport();
+                    break;
+                case 7:
+                    generateChannelPerformanceReport();
+                    break;
+                case 0:
+                    ui.displayMessage("Returning to Main System Menu.");
+                    break;
+                default:
+                    ui.displayMessage("Invalid selection. Please try again.");
+            }
+        } while (choice != 0);
+    }
+
+    // =========================================================================
+    // CORE USE CASES (LINEAR QUEUE ADT OPERATIONAL LOGIC)
+    // =========================================================================
+
+    private void registerNewBooking() {
+        ui.displayHeader("REGISTER NEW WALK-IN / STANDARD BOOKING");
+
+        int channelChoice = ui.inputBookingTypeChoice();
+        String bookingType = (channelChoice == 2) ? "Standard Advance" : "Walk-In";
+
+        String ic = ui.inputText("Enter Guest IC Number (e.g., 990101-14-1234): ");
+        if (ic.isEmpty()) {
+            ui.displayMessage("IC Number cannot be empty. Registration cancelled.");
+            return;
+        }
+
+        String name = ui.inputText("Enter Guest Full Name: ");
+        if (name.isEmpty()) {
+            ui.displayMessage("Guest name cannot be empty. Registration cancelled.");
+            return;
+        }
+
+        String contact = ui.inputText("Enter Contact Number (e.g., 012-3456789): ");
+        Guest guest = new Guest(ic, name, contact);
+
+        String roomType = ui.inputRoomType();
+        double rate = getRateForRoomType(roomType);
+
+        int nights = ui.inputInt("Enter Number of Nights to Stay: ");
+        if (nights <= 0) {
+            ui.displayMessage("Invalid stay duration. Registration cancelled.");
+            return;
+        }
+
+        String bookingId = "WB" + (nextBookingIdSuffix++);
+        String timestamp = LocalDateTime.now().format(dtf);
+
+        WalkInBooking newBooking = new WalkInBooking(
+                bookingId, guest, roomType, nights, rate, timestamp, bookingType, "WAITING"
+        );
+
+        // Linear ADT Enqueue (FIFO placement)
+        waitingQueue.enqueue(newBooking);
+        allBookings.add(newBooking);
+        bookingDAO.saveBookingsToFile(allBookings);
+
+        ui.displayMessage(String.format(
+            "Successfully Registered Arrival!\n" +
+            "Booking ID   : %s\n" +
+            "Guest Name   : %s\n" +
+            "Channel      : %s\n" +
+            "Room Type    : %s\n" +
+            "Queue Position: %d (Enqueued in FIFO order)",
+            bookingId, name, bookingType, roomType, waitingQueue.size()
+        ));
+    }
+
+    private void viewWaitingQueue() {
+        ui.displayHeader("PENDING CHRONOLOGICAL WAITING QUEUE (LINEAR QUEUE ADT)");
+
+        if (waitingQueue.isEmpty()) {
+            ui.displayMessage("The waiting queue is currently empty. No pending guests.");
+            return;
+        }
+
+        // Convert Queue to List without modifying queue structure
+        LinkedQueue<WalkInBooking> lq = (LinkedQueue<WalkInBooking>) waitingQueue;
+        ListInterface<WalkInBooking> queueList = lq.toList();
+
+        System.out.printf("%-6s | %-10s | %-18s | %-15s | %-10s | %-10s | %s%n",
+                "Pos", "Booking ID", "Guest Name", "Channel", "Room Type", "Nights", "Registration Time");
+        System.out.println("-----------------------------------------------------------------------------------------------------");
+
+        for (int i = 1; i <= queueList.getNumberOfEntries(); i++) {
+            WalkInBooking b = queueList.getEntry(i);
+            System.out.printf("#%-5d | %-10s | %-18s | %-15s | %-10s | %-10d | %s%n",
+                    i, b.getBookingId(), b.getGuest().getName(), b.getBookingType(),
+                    b.getRequestedRoomType(), b.getNumberOfNights(), b.getRegistrationTime());
+        }
+        System.out.println("-----------------------------------------------------------------------------------------------------");
+        System.out.printf("Total Waiting Guests in Queue: %d%n", queueList.getNumberOfEntries());
+
+        ui.pressEnterToContinue();
+    }
+
+    private void allocateRoomToNextGuest() {
+        ui.displayHeader("ALLOCATE ROOM TO NEXT WAITING GUEST (DEQUEUE & ASSIGN)");
+
+        if (waitingQueue.isEmpty()) {
+            ui.displayMessage("Waiting queue is empty. No pending guests to allocate.");
+            return;
+        }
+
+        WalkInBooking nextBooking = waitingQueue.getFront(); // Peek front guest
+        System.out.println("\nNext Guest at Front of Queue:");
+        System.out.println(nextBooking.toDetailString());
+
+        // Search for an available room matching requested room type
+        Room matchedRoom = null;
+        for (int i = 1; i <= roomList.getNumberOfEntries(); i++) {
+            Room r = roomList.getEntry(i);
+            if (r.getRoomType().equalsIgnoreCase(nextBooking.getRequestedRoomType()) &&
+                "Ready for Check-In".equalsIgnoreCase(r.getCurrentStatus())) {
+                matchedRoom = r;
+                break;
+            }
+        }
+
+        if (matchedRoom == null) {
+            ui.displayMessage("No room of type '" + nextBooking.getRequestedRoomType() + "' is currently 'Ready for Check-In'.\n" +
+                              "Guest remains at the front of the queue until housekeeping releases a matching room.");
+            return;
+        }
+
+        if (ui.confirmAction("Assign Room " + matchedRoom.getRoomId() + " to " + nextBooking.getGuest().getName() + "?")) {
+            // Dequeue from Queue Linear ADT
+            waitingQueue.dequeue();
+
+            // Update entity states
+            matchedRoom.setCurrentStatus("Occupied");
+            nextBooking.setAssignedRoom(matchedRoom);
+            nextBooking.setStatus("ALLOCATED");
+
+            // Persist changes
+            bookingDAO.saveBookingsToFile(allBookings);
+            housekeepingDAO.saveRoomsToFile(roomList);
+
+            ui.displayMessage(String.format(
+                "ROOM ALLOCATION SUCCESSFUL!\n" +
+                "Guest      : %s\n" +
+                "Booking ID : %s\n" +
+                "Room Assigned: %s (%s, Floor %d)\n" +
+                "Remaining Queue Size: %d",
+                nextBooking.getGuest().getName(), nextBooking.getBookingId(),
+                matchedRoom.getRoomId(), matchedRoom.getRoomType(), matchedRoom.getFloorNumber(),
+                waitingQueue.size()
+            ));
+        } else {
+            ui.displayMessage("Allocation cancelled. Guest remains in queue.");
+        }
+    }
+
+    private void cancelOrModifyBooking() {
+        ui.displayHeader("CANCEL OR MODIFY PENDING REGISTRATION");
+
+        String queryId = ui.inputText("Enter Booking ID to Cancel/Modify (e.g., WB1001): ");
+        if (queryId.isEmpty()) return;
+
+        WalkInBooking booking = findBookingById(queryId);
+        if (booking == null) {
+            ui.displayMessage("Booking ID '" + queryId + "' not found.");
+            return;
+        }
+
+        System.out.println("\nBooking Details Found:");
+        System.out.println(booking.toDetailString());
+
+        if (!"WAITING".equalsIgnoreCase(booking.getStatus())) {
+            ui.displayMessage("Only pending ('WAITING') registrations can be modified/cancelled. Current status: " + booking.getStatus());
+            return;
+        }
+
+        System.out.println("\nSelect Action:");
+        System.out.println(" [1] Cancel Registration");
+        System.out.println(" [2] Modify Requested Room Type");
+        System.out.println(" [0] Go Back");
+        int choice = ui.inputInt("Select [0-2]: ");
+
+        if (choice == 1) {
+            if (ui.confirmAction("Cancel registration for " + booking.getBookingId() + "?")) {
+                booking.setStatus("CANCELLED");
+                rebuildWaitingQueue();
+                bookingDAO.saveBookingsToFile(allBookings);
+                ui.displayMessage("Registration " + booking.getBookingId() + " successfully cancelled.");
+            }
+        } else if (choice == 2) {
+            String newRoomType = ui.inputRoomType();
+            booking.setRequestedRoomType(newRoomType);
+            booking.setEstimatedRatePerNight(getRateForRoomType(newRoomType));
+            bookingDAO.saveBookingsToFile(allBookings);
+            ui.displayMessage("Room type updated to '" + newRoomType + "' for " + booking.getBookingId() + ".");
+        }
+    }
+
+    // =========================================================================
+    // EXPLICIT SEARCHING & SORTING ALGORITHMS
+    // =========================================================================
+
+    private void searchBookings() {
+        ui.displayHeader("SEARCH REGISTRATIONS (EXPLICIT SEARCHING ALGORITHMS)");
+
+        System.out.println("Search Criteria Options:");
+        System.out.println(" [1] Exact Search by Booking ID (Linear Search)");
+        System.out.println(" [2] Search by Guest IC Number (Linear Search)");
+        System.out.println(" [3] Search by Guest Name Keyword (Sub-string Search)");
+        System.out.println(" [4] Binary Search by Booking ID (Requires Sorted Array)");
+        System.out.print("Select Search Option [1-4]: ");
+        int choice = ui.inputInt("");
+
+        if (choice == 1) {
+            String id = ui.inputText("Enter Booking ID: ");
+            WalkInBooking found = findBookingById(id);
+            displaySearchResult(found);
+        } else if (choice == 2) {
+            String ic = ui.inputText("Enter Guest IC Number: ");
+            WalkInBooking found = findBookingByIC(ic);
+            displaySearchResult(found);
+        } else if (choice == 3) {
+            String nameKey = ui.inputText("Enter Guest Name Keyword: ");
+            ListInterface<WalkInBooking> results = searchBookingsByName(nameKey);
+            displaySearchResultsList(results);
+        } else if (choice == 4) {
+            String id = ui.inputText("Enter Booking ID for Binary Search: ");
+            WalkInBooking found = binarySearchById(id);
+            displaySearchResult(found);
+        } else {
+            ui.displayMessage("Invalid search option.");
+        }
+
+        ui.pressEnterToContinue();
+    }
+
+    /**
+     * Sequential Linear Search by Booking ID.
+     */
+    private WalkInBooking findBookingById(String bookingId) {
+        for (int i = 1; i <= allBookings.getNumberOfEntries(); i++) {
+            WalkInBooking b = allBookings.getEntry(i);
+            if (b.getBookingId().equalsIgnoreCase(bookingId.trim())) {
+                return b;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Sequential Linear Search by Guest IC.
+     */
+    private WalkInBooking findBookingByIC(String ic) {
+        for (int i = 1; i <= allBookings.getNumberOfEntries(); i++) {
+            WalkInBooking b = allBookings.getEntry(i);
+            if (b.getGuest().getIcNumber().equalsIgnoreCase(ic.trim())) {
+                return b;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Sub-string Search by Guest Name.
+     */
+    private ListInterface<WalkInBooking> searchBookingsByName(String keyword) {
+        ListInterface<WalkInBooking> results = new ArrayList<>();
+        String lowerKey = keyword.trim().toLowerCase();
+        for (int i = 1; i <= allBookings.getNumberOfEntries(); i++) {
+            WalkInBooking b = allBookings.getEntry(i);
+            if (b.getGuest().getName().toLowerCase().contains(lowerKey)) {
+                results.add(b);
+            }
+        }
+        return results;
+    }
+
+    /**
+     * Binary Search Algorithm by Booking ID O(log n).
+     */
+    private WalkInBooking binarySearchById(String bookingId) {
+        // Create copy and sort by Booking ID using Insertion Sort
+        ListInterface<WalkInBooking> sortedList = copyList(allBookings);
+        insertionSortById(sortedList);
+
+        int low = 1;
+        int high = sortedList.getNumberOfEntries();
+        String target = bookingId.trim().toUpperCase();
+
+        while (low <= high) {
+            int mid = low + (high - low) / 2;
+            WalkInBooking midBooking = sortedList.getEntry(mid);
+            int comp = midBooking.getBookingId().compareToIgnoreCase(target);
+
+            if (comp == 0) {
+                return midBooking;
+            } else if (comp < 0) {
+                low = mid + 1;
+            } else {
+                high = mid - 1;
+            }
+        }
+        return null;
+    }
+
+    private void displaySearchResult(WalkInBooking b) {
+        if (b != null) {
+            ui.displayMessage("Search Result Found:\n" + b.toDetailString());
+        } else {
+            ui.displayMessage("No matching registration found.");
+        }
+    }
+
+    private void displaySearchResultsList(ListInterface<WalkInBooking> list) {
+        if (list.isEmpty()) {
+            ui.displayMessage("No matching registrations found.");
+            return;
+        }
+        System.out.printf("%-10s | %-18s | %-15s | %-12s | %-10s | %s%n",
+                "Booking ID", "Guest Name", "Channel", "Room Type", "Status", "Room Assigned");
+        System.out.println("-----------------------------------------------------------------------------------------");
+        for (int i = 1; i <= list.getNumberOfEntries(); i++) {
+            WalkInBooking b = list.getEntry(i);
+            System.out.printf("%-10s | %-18s | %-15s | %-12s | %-10s | %s%n",
+                    b.getBookingId(), b.getGuest().getName(), b.getBookingType(),
+                    b.getRequestedRoomType(), b.getStatus(),
+                    (b.getAssignedRoom() != null ? b.getAssignedRoom().getRoomId() : "N/A"));
+        }
+        System.out.println("-----------------------------------------------------------------------------------------");
+    }
+
+    // =========================================================================
+    // MANAGEMENT ANALYTICAL REPORTS
+    // =========================================================================
+
+    /**
+     * Management Report 1: Peak Season Queue Allocation & Efficiency Summary
+     * Combines search/sort, filters by status/room type, displays allocation efficiency metrics.
+     */
+    private void generateQueueEfficiencyReport() {
+        ui.printReportHeader("PEAK SEASON QUEUE ALLOCATION & ROOM DEMAND EFFICIENCY SUMMARY");
+
+        System.out.println("Filter Options:");
+        System.out.println(" [1] All Registrations");
+        System.out.println(" [2] Pending WAITING Guests Only");
+        System.out.println(" [3] ALLOCATED Guests Only");
+        System.out.print("Select Filter Criteria [1-3]: ");
+        int filterChoice = ui.inputInt("");
+
+        ListInterface<WalkInBooking> filteredList = new ArrayList<>();
+        for (int i = 1; i <= allBookings.getNumberOfEntries(); i++) {
+            WalkInBooking b = allBookings.getEntry(i);
+            if (filterChoice == 2 && !"WAITING".equalsIgnoreCase(b.getStatus())) continue;
+            if (filterChoice == 3 && !"ALLOCATED".equalsIgnoreCase(b.getStatus())) continue;
+            filteredList.add(b);
+        }
+
+        if (filteredList.isEmpty()) {
+            ui.displayMessage("No records match the selected filter criteria.");
+            return;
+        }
+
+        // Explicit Insertion Sort by Registration Time (Chronological order)
+        insertionSortByTime(filteredList);
+
+        int totalWaiting = 0;
+        int totalAllocated = 0;
+        int totalCancelled = 0;
+        double totalEstRevenue = 0.0;
+
+        System.out.printf("%-10s | %-18s | %-15s | %-12s | %-10s | RM %-8s | %s%n",
+                "Booking ID", "Guest Name", "Channel", "Room Type", "Status", "Est Cost", "Registration Time");
+        System.out.println("---------------------------------------------------------------------------------------------------------");
+
+        for (int i = 1; i <= filteredList.getNumberOfEntries(); i++) {
+            WalkInBooking b = filteredList.getEntry(i);
+            if ("WAITING".equalsIgnoreCase(b.getStatus())) totalWaiting++;
+            else if ("ALLOCATED".equalsIgnoreCase(b.getStatus())) totalAllocated++;
+            else if ("CANCELLED".equalsIgnoreCase(b.getStatus())) totalCancelled++;
+
+            totalEstRevenue += b.getTotalEstimatedCost();
+
+            System.out.printf("%-10s | %-18s | %-15s | %-12s | %-10s | RM %-8.2f | %s%n",
+                    b.getBookingId(), b.getGuest().getName(), b.getBookingType(),
+                    b.getRequestedRoomType(), b.getStatus(), b.getTotalEstimatedCost(), b.getRegistrationTime());
+        }
+        System.out.println("---------------------------------------------------------------------------------------------------------");
+
+        double allocationRate = (filteredList.getNumberOfEntries() > 0) ?
+                ((double) totalAllocated / filteredList.getNumberOfEntries()) * 100.0 : 0.0;
+
+        System.out.println("\n--- QUEUE OPERATIONAL METRICS ---");
+        System.out.printf("  Pending Queue (Waiting) : %d guest(s)%n", totalWaiting);
+        System.out.printf("  Successfully Allocated   : %d guest(s)%n", totalAllocated);
+        System.out.printf("  Cancelled Registrations  : %d guest(s)%n", totalCancelled);
+        System.out.printf("  Queue Allocation Rate    : %.2f%%%n", allocationRate);
+        System.out.printf("  Total Projected Revenue  : RM %.2f%n", totalEstRevenue);
+
+        ui.printReportFooter(filteredList.getNumberOfEntries());
+        ui.pressEnterToContinue();
+    }
+
+    /**
+     * Management Report 2: Booking Channel Performance & Financial Forecast
+     * Combines multi-criteria filtering, Bubble sort by revenue/nights, financial projections.
+     */
+    private void generateChannelPerformanceReport() {
+        ui.printReportHeader("BOOKING CHANNEL PERFORMANCE & REVENUE CONTRIBUTION FORECAST");
+
+        System.out.println("Filter by Booking Channel:");
+        System.out.println(" [1] All Channels (Walk-In & Standard Advance)");
+        System.out.println(" [2] Walk-In Guests Only");
+        System.out.println(" [3] Standard Advance Bookings Only");
+        System.out.print("Select Filter [1-3]: ");
+        int channelFilter = ui.inputInt("");
+
+        ListInterface<WalkInBooking> filteredList = new ArrayList<>();
+        for (int i = 1; i <= allBookings.getNumberOfEntries(); i++) {
+            WalkInBooking b = allBookings.getEntry(i);
+            if (channelFilter == 2 && !"Walk-In".equalsIgnoreCase(b.getBookingType())) continue;
+            if (channelFilter == 3 && !"Standard Advance".equalsIgnoreCase(b.getBookingType())) continue;
+            filteredList.add(b);
+        }
+
+        if (filteredList.isEmpty()) {
+            ui.displayMessage("No records found for the selected channel filter.");
+            return;
+        }
+
+        // Explicit Bubble Sort by Total Estimated Revenue Descending
+        bubbleSortByRevenueDescending(filteredList);
+
+        int countWalkIn = 0;
+        int countAdvance = 0;
+        double revWalkIn = 0.0;
+        double revAdvance = 0.0;
+        int totalNights = 0;
+
+        System.out.printf("%-10s | %-18s | %-15s | %-12s | %-6s | RM %-10s | %s%n",
+                "Booking ID", "Guest Name", "Channel", "Room Type", "Nights", "Total Cost", "Status");
+        System.out.println("---------------------------------------------------------------------------------------------------------");
+
+        for (int i = 1; i <= filteredList.getNumberOfEntries(); i++) {
+            WalkInBooking b = filteredList.getEntry(i);
+            if ("Walk-In".equalsIgnoreCase(b.getBookingType())) {
+                countWalkIn++;
+                revWalkIn += b.getTotalEstimatedCost();
+            } else {
+                countAdvance++;
+                revAdvance += b.getTotalEstimatedCost();
+            }
+            totalNights += b.getNumberOfNights();
+
+            System.out.printf("%-10s | %-18s | %-15s | %-12s | %-6d | RM %-10.2f | %s%n",
+                    b.getBookingId(), b.getGuest().getName(), b.getBookingType(),
+                    b.getRequestedRoomType(), b.getNumberOfNights(), b.getTotalEstimatedCost(), b.getStatus());
+        }
+        System.out.println("---------------------------------------------------------------------------------------------------------");
+
+        double avgNights = (filteredList.getNumberOfEntries() > 0) ?
+                (double) totalNights / filteredList.getNumberOfEntries() : 0.0;
+
+        System.out.println("\n--- FINANCIAL & CHANNEL PERFORMANCE BREAKDOWN ---");
+        System.out.printf("  Walk-In Volume           : %d booking(s) | Projected Revenue: RM %.2f%n", countWalkIn, revWalkIn);
+        System.out.printf("  Standard Advance Volume  : %d booking(s) | Projected Revenue: RM %.2f%n", countAdvance, revAdvance);
+        System.out.printf("  Combined Total Revenue   : RM %.2f%n", (revWalkIn + revAdvance));
+        System.out.printf("  Average Length of Stay   : %.1f night(s)%n", avgNights);
+
+        ui.printReportFooter(filteredList.getNumberOfEntries());
+        ui.pressEnterToContinue();
+    }
+
+    // =========================================================================
+    // EXPLICIT SORTING UTILITIES
+    // =========================================================================
+
+    private void insertionSortById(ListInterface<WalkInBooking> list) {
+        int n = list.getNumberOfEntries();
+        for (int i = 2; i <= n; i++) {
+            WalkInBooking key = list.getEntry(i);
+            int j = i - 1;
+            while (j >= 1 && list.getEntry(j).getBookingId().compareToIgnoreCase(key.getBookingId()) > 0) {
+                list.replace(j + 1, list.getEntry(j));
+                j--;
+            }
+            list.replace(j + 1, key);
+        }
+    }
+
+    private void insertionSortByTime(ListInterface<WalkInBooking> list) {
+        int n = list.getNumberOfEntries();
+        for (int i = 2; i <= n; i++) {
+            WalkInBooking key = list.getEntry(i);
+            int j = i - 1;
+            while (j >= 1 && list.getEntry(j).getRegistrationTime().compareTo(key.getRegistrationTime()) > 0) {
+                list.replace(j + 1, list.getEntry(j));
+                j--;
+            }
+            list.replace(j + 1, key);
+        }
+    }
+
+    private void bubbleSortByRevenueDescending(ListInterface<WalkInBooking> list) {
+        int n = list.getNumberOfEntries();
+        for (int i = 1; i < n; i++) {
+            for (int j = 1; j <= n - i; j++) {
+                WalkInBooking b1 = list.getEntry(j);
+                WalkInBooking b2 = list.getEntry(j + 1);
+                if (b1.getTotalEstimatedCost() < b2.getTotalEstimatedCost()) {
+                    list.replace(j, b2);
+                    list.replace(j + 1, b1);
+                }
+            }
+        }
+    }
+
+    private ListInterface<WalkInBooking> copyList(ListInterface<WalkInBooking> original) {
+        ListInterface<WalkInBooking> copy = new ArrayList<>(original.getNumberOfEntries());
+        for (int i = 1; i <= original.getNumberOfEntries(); i++) {
+            copy.add(original.getEntry(i));
+        }
+        return copy;
+    }
+
+    private double getRateForRoomType(String roomType) {
+        if ("Deluxe".equalsIgnoreCase(roomType)) return 350.00;
+        if ("Suite".equalsIgnoreCase(roomType)) return 600.00;
+        return 200.00; // Standard
+    }
+}
