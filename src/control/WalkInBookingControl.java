@@ -223,6 +223,9 @@ public class WalkInBookingControl {
         }
 
         WalkInBooking nextBooking = waitingQueue.getFront(); // Peek front guest
+        System.out.println("\n--- CURRENT SYSTEM ROOM TABLE ---");
+        boundary.HousekeepingUI.displayRoomTable(roomList);
+
         System.out.println("\nNext Guest at Front of Queue:");
         System.out.println(nextBooking.toDetailString());
 

@@ -3,31 +3,17 @@ package control;
 import adt.HashMap;
 import adt.MapInterface;
 import boundary.FrontDeskUI;
+import boundary.HousekeepingUI;
 import entity.Guest;
 import entity.Reservation;
 import entity.Room;
 import utility.MessageUI;
 
-/**
- * Controller for the Front-Desk Service subsystem.
- * Implements full CRUD on a custom HashMap (Non-Linear ADT) keyed by
- * 8-digit confirmation number, plus searching and management reports.
- *
- * ECB Pattern: This class serves as the Control layer.
- *
- * @author Mun Jun How
- */
 public class FrontDeskController {
 
-    // -------------------------------------------------------------------------
-    // Non-Linear ADT: Custom HashMap<String, Reservation>
-    // Key   = 8-digit Confirmation Number (for O(1) lookup)
-    // Value = Reservation object
-    // -------------------------------------------------------------------------
     private MapInterface<String, Reservation> reservationsMap;
-
-    // Separate array for room inventory
-    private Room[] rooms;
+    private adt.ListInterface<Room> roomList = new adt.ArrayList<>();
+    private dao.HousekeepingDAO housekeepingDAO = new dao.HousekeepingDAO();
 
     private FrontDeskUI ui;
     private int nextConfirmationSuffix; // Used to generate unique 8-digit IDs
@@ -40,28 +26,29 @@ public class FrontDeskController {
         reservationsMap = new HashMap<>();
         ui = new FrontDeskUI();
         nextConfirmationSuffix = 5;
+        
+        // Synchronize with shared rooms.dat
+        roomList = housekeepingDAO.retrieveRoomsFromFile();
+        if (roomList == null || roomList.isEmpty()) {
+            HousekeepingControl hk = new HousekeepingControl();
+            roomList = hk.getRoomList();
+        }
+
         initHardcodedData();
     }
 
-    /**
-     * Populates the HashMap collection with hard-coded demo data.
-     *
-     * Per assignment specification: "You may populate the collection objects
-     * by reading from a file or using a method which adds hard-coded entity values."
-     * This method fulfils that requirement by pre-loading realistic sample
-     * reservations so all features (search, reports, CRUD) can be demonstrated.
-     */
     private void initHardcodedData() {
-        // --- Room Inventory (matches room types: Standard / Deluxe / Suite) ---
-        rooms = new Room[]{
-            new Room("101", "Standard", 1, "Occupied",           ""),
-            new Room("102", "Standard", 1, "Ready for Check-In", ""),
-            new Room("201", "Deluxe",   2, "Occupied",           ""),
-            new Room("202", "Deluxe",   2, "Ready for Check-In", ""),
-            new Room("203", "Deluxe",   2, "Ready for Check-In", ""),
-            new Room("301", "Suite",    3, "Occupied",           ""),
-            new Room("302", "Suite",    3, "Ready for Check-In", "")
-        };
+        Room r101 = findRoomById("R101");
+        Room r102 = findRoomById("R102");
+        Room r201 = findRoomById("R201");
+        Room r202 = findRoomById("R202");
+        Room r301 = findRoomById("R301");
+
+        if (r101 == null) r101 = new Room("R101", "Presidential Suite", 1, "Occupied", "ST101");
+        if (r102 == null) r102 = new Room("R102", "Executive Suite", 1, "Ready for Check-In", "ST102");
+        if (r201 == null) r201 = new Room("R201", "Presidential Suite", 2, "Occupied", "ST201");
+        if (r202 == null) r202 = new Room("R202", "Executive Suite", 2, "Ready for Check-In", "ST202");
+        if (r301 == null) r301 = new Room("R301", "Presidential Suite", 3, "Occupied", "ST301");
 
         // --- Guest Entity Objects ---
         Guest g1 = new Guest("990101-14-5566", "Ali Bin Abu",    "012-3456789");
@@ -70,26 +57,21 @@ public class FrontDeskController {
         Guest g4 = new Guest("750505-08-4433", "John Doe",       "011-5556666");
 
         // --- Reservation Entities: put into HashMap with 8-digit confirmation number as key ---
-        // Reservation 1: Checked-In, Standard Room, has room service charge
-        Reservation r1 = new Reservation("12345678", g1, rooms[0], "2026-08-01", "2026-08-05", 200.00, "Checked-In");
-        r1.addIncidentalCharge(85.00);  // Room service
+        Reservation res1 = new Reservation("12345678", g1, r101, "2026-08-01", "2026-08-05", 600.00, "Checked-In");
+        res1.addIncidentalCharge(85.00);
 
-        // Reservation 2: Confirmed (not yet checked in), no incidentals
-        Reservation r2 = new Reservation("87654321", g2, rooms[2], "2026-08-10", "2026-08-12", 350.00, "Confirmed");
+        Reservation res2 = new Reservation("87654321", g2, r201, "2026-08-10", "2026-08-12", 600.00, "Confirmed");
 
-        // Reservation 3: Checked-In, Suite, high-value guest with spa & dining charges
-        Reservation r3 = new Reservation("11223344", g3, rooms[5], "2026-08-02", "2026-08-07", 600.00, "Checked-In");
-        r3.addIncidentalCharge(650.00); // Spa, minibar & restaurant combined
+        Reservation res3 = new Reservation("11223344", g3, r301, "2026-08-02", "2026-08-07", 600.00, "Checked-In");
+        res3.addIncidentalCharge(650.00);
 
-        // Reservation 4: Confirmed, Deluxe Room, pre-booked packages
-        Reservation r4 = new Reservation("99887766", g4, rooms[3], "2026-08-15", "2026-08-20", 350.00, "Confirmed");
-        r4.addIncidentalCharge(900.00); // Pre-booked spa & tour packages
+        Reservation res4 = new Reservation("99887766", g4, r202, "2026-08-15", "2026-08-20", 350.00, "Confirmed");
+        res4.addIncidentalCharge(900.00);
 
-        // Insert all reservations into custom HashMap (Non-Linear ADT)
-        reservationsMap.put(r1.getConfirmationNumber(), r1);
-        reservationsMap.put(r2.getConfirmationNumber(), r2);
-        reservationsMap.put(r3.getConfirmationNumber(), r3);
-        reservationsMap.put(r4.getConfirmationNumber(), r4);
+        reservationsMap.put(res1.getConfirmationNumber(), res1);
+        reservationsMap.put(res2.getConfirmationNumber(), res2);
+        reservationsMap.put(res3.getConfirmationNumber(), res3);
+        reservationsMap.put(res4.getConfirmationNumber(), res4);
     }
 
     // =========================================================================
@@ -186,27 +168,24 @@ public class FrontDeskController {
      * Feature 3: Room Availability Query.
      * Filters the room array for available rooms of the requested type.
      */
-    private void checkRoomAvailability() {
-        ui.displayHeader("ROOM AVAILABILITY QUERY");
-        String type = ui.inputRoomType();
-
-        System.out.println();
-        System.out.printf("%-8s | %-15s | %-6s | %-22s%n",
-                "Room ID", "Room Type", "Floor", "Status");
-        ui.displayFooter();
-
-        int availableCount = 0;
-        for (Room r : rooms) {
-            if (r.getRoomType().equalsIgnoreCase(type)) {
-                System.out.printf("%-8s | %-15s | %-6d | %-22s%n",
-                        r.getRoomId(), r.getRoomType(), r.getFloorNumber(), r.getCurrentStatus());
-                if (r.getCurrentStatus().equalsIgnoreCase("Ready for Check-In")) {
-                    availableCount++;
-                }
+    private Room findRoomById(String roomId) {
+        if (roomId == null) return null;
+        for (int i = 1; i <= roomList.getNumberOfEntries(); i++) {
+            Room r = roomList.getEntry(i);
+            if (r.getRoomId().equalsIgnoreCase(roomId)) {
+                return r;
             }
         }
-        ui.displayFooter();
-        ui.displayMessage(availableCount + " room(s) of type [" + type + "] are available for Check-In.");
+        return null;
+    }
+
+    /**
+     * Feature 3: Room Availability Query.
+     * Displays the synchronized room status table across all 3 system modules.
+     */
+    private void checkRoomAvailability() {
+        ui.displayHeader("SYSTEM-WIDE ROOM AVAILABILITY & STATUS TABLE");
+        HousekeepingUI.displayRoomTable(roomList);
         ui.pressEnterToContinue();
     }
 
@@ -251,32 +230,20 @@ public class FrontDeskController {
             return;
         }
 
-        // Show available rooms
-        ui.displayMessage("--- Available Rooms ---");
-        boolean anyAvailable = false;
-        for (Room r : rooms) {
-            if (r.getCurrentStatus().equalsIgnoreCase("Ready for Check-In")) {
-                System.out.printf("  Room %-4s | %-10s | Floor %d%n",
-                        r.getRoomId(), r.getRoomType(), r.getFloorNumber());
-                anyAvailable = true;
-            }
-        }
-        if (!anyAvailable) {
-            ui.displayMessage("No rooms are currently available for check-in.");
-            ui.pressEnterToContinue();
-            return;
-        }
+        // Display shared Room Table
+        ui.displayMessage("--- CURRENT SYSTEM ROOM TABLE ---");
+        HousekeepingUI.displayRoomTable(roomList);
 
-        String roomId = ui.inputText("Enter Room ID to assign: ").toUpperCase();
+        String roomId = ui.inputText("Enter Room ID to assign (e.g., R101): ").toUpperCase();
         Room selectedRoom = findRoomById(roomId);
 
         if (selectedRoom == null) {
-            ui.displayMessage("Room " + roomId + " not found.");
+            ui.displayMessage("Room " + roomId + " not found in system.");
             ui.pressEnterToContinue();
             return;
         }
         if (!selectedRoom.getCurrentStatus().equalsIgnoreCase("Ready for Check-In")) {
-            ui.displayMessage("Room " + roomId + " is not available (Status: " + selectedRoom.getCurrentStatus() + ").");
+            ui.displayMessage("Room " + roomId + " is not available for Check-In (Current Status: " + selectedRoom.getCurrentStatus() + ").");
             ui.pressEnterToContinue();
             return;
         }
@@ -292,8 +259,9 @@ public class FrontDeskController {
         Reservation newRes   = new Reservation(confNum, newGuest, selectedRoom,
                                                checkIn, checkOut, rate, "Checked-In");
 
-        // Mark room as Occupied
+        // Mark room as Occupied and persist across all 3 system modules
         selectedRoom.setCurrentStatus("Occupied");
+        housekeepingDAO.saveRoomsToFile(roomList);
 
         // INSERT into HashMap — key = confirmation number
         reservationsMap.put(confNum, newRes);
@@ -403,17 +371,23 @@ public class FrontDeskController {
         res.setPaid(true);
         res.setStatus("Checked-Out");
 
-        // Free up the room
+        // Free up the room and trigger Housekeeping status change to Dirty
         Room room = res.getRoom();
         if (room != null) {
-            room.setCurrentStatus("Dirty"); // Triggers housekeeping cycle
+            Room matchingRoom = findRoomById(room.getRoomId());
+            if (matchingRoom != null) {
+                matchingRoom.setCurrentStatus("Dirty");
+            } else {
+                room.setCurrentStatus("Dirty");
+            }
+            housekeepingDAO.saveRoomsToFile(roomList);
         }
 
         // REMOVE from active HashMap
         reservationsMap.remove(confNum);
 
         ui.displayMessage("Check-out successful for " + res.getGuest().getName() +
-                ".\nRoom " + (room != null ? room.getRoomId() : "N/A") + " is now Dirty (pending housekeeping).\nPayment collected: RM" +
+                ".\nRoom " + (room != null ? room.getRoomId() : "N/A") + " status updated to 'Dirty' (pending housekeeping).\nPayment collected: RM" +
                 String.format("%.2f", res.getTotalAmount()));
         ui.pressEnterToContinue();
     }
@@ -470,26 +444,27 @@ public class FrontDeskController {
 
         // Calculate total rooms per tier for occupancy rate
         int totalStd = 0, totalDlx = 0, totalSte = 0;
-        for (Room rm : rooms) {
-            switch (rm.getRoomType().toLowerCase()) {
-                case "standard": totalStd++; break;
-                case "deluxe":   totalDlx++; break;
-                case "suite":    totalSte++; break;
-            }
+        int totalRoomsCount = roomList.getNumberOfEntries();
+        for (int i = 1; i <= totalRoomsCount; i++) {
+            Room rm = roomList.getEntry(i);
+            String type = rm.getRoomType().toLowerCase();
+            if (type.contains("standard")) totalStd++;
+            else if (type.contains("executive") || type.contains("deluxe")) totalDlx++;
+            else if (type.contains("presidential") || type.contains("suite")) totalSte++;
         }
 
         System.out.println("\n  OCCUPANCY SUMMARY BY ROOM TIER:");
         System.out.printf("  %-12s : %d / %d occupied (%.0f%%)%n",
                 "Standard", standard, totalStd, totalStd > 0 ? standard * 100.0 / totalStd : 0);
         System.out.printf("  %-12s : %d / %d occupied (%.0f%%)%n",
-                "Deluxe", deluxe, totalDlx, totalDlx > 0 ? deluxe * 100.0 / totalDlx : 0);
+                "Deluxe/Executive", deluxe, totalDlx, totalDlx > 0 ? deluxe * 100.0 / totalDlx : 0);
         System.out.printf("  %-12s : %d / %d occupied (%.0f%%)%n",
-                "Suite", suite, totalSte, totalSte > 0 ? suite * 100.0 / totalSte : 0);
+                "Presidential/Suite", suite, totalSte, totalSte > 0 ? suite * 100.0 / totalSte : 0);
 
         int totalOccupied = standard + deluxe + suite;
         System.out.printf("  %-12s : %d / %d (%.0f%%)%n",
-                "Overall", totalOccupied, rooms.length,
-                rooms.length > 0 ? totalOccupied * 100.0 / rooms.length : 0);
+                "Overall", totalOccupied, totalRoomsCount,
+                totalRoomsCount > 0 ? totalOccupied * 100.0 / totalRoomsCount : 0);
 
         ui.printReportFooter(checkedIn.length);
         ui.pressEnterToContinue();
@@ -564,13 +539,6 @@ public class FrontDeskController {
     // =========================================================================
     // HELPER / UTILITY METHODS
     // =========================================================================
-
-    private Room findRoomById(String roomId) {
-        for (Room r : rooms) {
-            if (r.getRoomId().equalsIgnoreCase(roomId)) return r;
-        }
-        return null;
-    }
 
     private Reservation[] trimArray(Reservation[] arr, int size) {
         Reservation[] trimmed = new Reservation[size];
