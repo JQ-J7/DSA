@@ -123,26 +123,26 @@ public class HousekeepingControl {
 
     private void addDefaultDemoRooms() {
         Room[] constantRooms = new Room[] {
-            // Floor 1: 1 Presidential Suite, 2 Executive Suites, 2 Standard Deluxe
-            new Room("R101", "Presidential Suite", 1, "Dirty", "ST101"),
-            new Room("R102", "Executive Suite", 1, "Cleaning In Progress", "ST102"),
-            new Room("R103", "Executive Suite", 1, "Inspected", "ST103"),
-            new Room("R104", "Standard Deluxe", 1, "Ready for Check-In", "ST104"),
-            new Room("R105", "Standard Deluxe", 1, "Ready for Check-In", "ST105"),
+            // Floor 1: 1 Suite Room, 2 Deluxe Rooms, 2 Standard Rooms
+            new Room("R101", "Suite Room", 1, "Dirty", "ST101"),
+            new Room("R102", "Deluxe Room", 1, "Cleaning In Progress", "ST102"),
+            new Room("R103", "Deluxe Room", 1, "Inspected", "ST103"),
+            new Room("R104", "Standard Room", 1, "Ready for Check-In", "ST104"),
+            new Room("R105", "Standard Room", 1, "Ready for Check-In", "ST105"),
 
-            // Floor 2: 1 Presidential Suite, 2 Executive Suites, 2 Standard Deluxe
-            new Room("R201", "Presidential Suite", 2, "Dirty", "ST201"),
-            new Room("R202", "Executive Suite", 2, "Cleaning In Progress", "ST202"),
-            new Room("R203", "Executive Suite", 2, "Inspected", "ST203"),
-            new Room("R204", "Standard Deluxe", 2, "Ready for Check-In", "ST204"),
-            new Room("R205", "Standard Deluxe", 2, "Ready for Check-In", "ST205"),
+            // Floor 2: 1 Suite Room, 2 Deluxe Rooms, 2 Standard Rooms
+            new Room("R201", "Suite Room", 2, "Dirty", "ST201"),
+            new Room("R202", "Deluxe Room", 2, "Cleaning In Progress", "ST202"),
+            new Room("R203", "Deluxe Room", 2, "Inspected", "ST203"),
+            new Room("R204", "Standard Room", 2, "Ready for Check-In", "ST204"),
+            new Room("R205", "Standard Room", 2, "Ready for Check-In", "ST205"),
 
-            // Floor 3: 1 Presidential Suite, 2 Executive Suites, 2 Standard Deluxe
-            new Room("R301", "Presidential Suite", 3, "Dirty", "ST301"),
-            new Room("R302", "Executive Suite", 3, "Cleaning In Progress", "ST302"),
-            new Room("R303", "Executive Suite", 3, "Inspected", "ST303"),
-            new Room("R304", "Standard Deluxe", 3, "Ready for Check-In", "ST304"),
-            new Room("R305", "Standard Deluxe", 3, "Ready for Check-In", "ST305")
+            // Floor 3: 1 Suite Room, 2 Deluxe Rooms, 2 Standard Rooms
+            new Room("R301", "Suite Room", 3, "Dirty", "ST301"),
+            new Room("R302", "Deluxe Room", 3, "Cleaning In Progress", "ST302"),
+            new Room("R303", "Deluxe Room", 3, "Inspected", "ST303"),
+            new Room("R304", "Standard Room", 3, "Ready for Check-In", "ST304"),
+            new Room("R305", "Standard Room", 3, "Ready for Check-In", "ST305")
         };
         for (Room r : constantRooms) {
             Room existing = findRoomById(r.getRoomId());
@@ -161,21 +161,21 @@ public class HousekeepingControl {
         int taskCounter = 1001;
 
         Room[] defaultRooms = new Room[] {
-            new Room("R101", "Presidential Suite", 1, "Dirty", "ST101"),
-            new Room("R102", "Executive Suite", 1, "Cleaning In Progress", "ST102"),
-            new Room("R103", "Executive Suite", 1, "Inspected", "ST103"),
-            new Room("R104", "Standard Deluxe", 1, "Ready for Check-In", "ST104"),
-            new Room("R105", "Standard Deluxe", 1, "Ready for Check-In", "ST105"),
-            new Room("R201", "Presidential Suite", 2, "Dirty", "ST201"),
-            new Room("R202", "Executive Suite", 2, "Cleaning In Progress", "ST202"),
-            new Room("R203", "Executive Suite", 2, "Inspected", "ST203"),
-            new Room("R204", "Standard Deluxe", 2, "Ready for Check-In", "ST204"),
-            new Room("R205", "Standard Deluxe", 2, "Ready for Check-In", "ST205"),
-            new Room("R301", "Presidential Suite", 3, "Dirty", "ST301"),
-            new Room("R302", "Executive Suite", 3, "Cleaning In Progress", "ST302"),
-            new Room("R303", "Executive Suite", 3, "Inspected", "ST303"),
-            new Room("R304", "Standard Deluxe", 3, "Ready for Check-In", "ST304"),
-            new Room("R305", "Standard Deluxe", 3, "Ready for Check-In", "ST305")
+            new Room("R101", "Suite Room", 1, "Dirty", "ST101"),
+            new Room("R102", "Deluxe Room", 1, "Cleaning In Progress", "ST102"),
+            new Room("R103", "Deluxe Room", 1, "Inspected", "ST103"),
+            new Room("R104", "Standard Room", 1, "Ready for Check-In", "ST104"),
+            new Room("R105", "Standard Room", 1, "Ready for Check-In", "ST105"),
+            new Room("R201", "Suite Room", 2, "Dirty", "ST201"),
+            new Room("R202", "Deluxe Room", 2, "Cleaning In Progress", "ST202"),
+            new Room("R203", "Deluxe Room", 2, "Inspected", "ST203"),
+            new Room("R204", "Standard Room", 2, "Ready for Check-In", "ST204"),
+            new Room("R205", "Standard Room", 2, "Ready for Check-In", "ST205"),
+            new Room("R301", "Suite Room", 3, "Dirty", "ST301"),
+            new Room("R302", "Deluxe Room", 3, "Cleaning In Progress", "ST302"),
+            new Room("R303", "Deluxe Room", 3, "Inspected", "ST303"),
+            new Room("R304", "Standard Room", 3, "Ready for Check-In", "ST304"),
+            new Room("R305", "Standard Room", 3, "Ready for Check-In", "ST305")
         };
 
         for (Room r : defaultRooms) {

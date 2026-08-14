@@ -631,8 +631,8 @@ public class WalkInBookingControl {
     }
 
     private double getRateForRoomType(String roomType) {
-        if ("Deluxe".equalsIgnoreCase(roomType)) return 350.00;
-        if ("Suite".equalsIgnoreCase(roomType)) return 600.00;
-        return 200.00; // Standard
+        if (roomType != null && roomType.toLowerCase().contains("deluxe")) return 350.00;
+        if (roomType != null && roomType.toLowerCase().contains("suite")) return 600.00;
+        return 200.00; // Standard Room
     }
 }

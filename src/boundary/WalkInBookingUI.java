@@ -58,12 +58,12 @@ public class WalkInBookingUI {
         System.out.println(" [2] Deluxe Room   (RM 350.00 / night)");
         System.out.println(" [3] Suite Room    (RM 600.00 / night)");
         System.out.print("Select Option [1-3]: ");
-        if (!scanner.hasNextLine()) return "Standard";
+        if (!scanner.hasNextLine()) return "Standard Room";
         String s = scanner.nextLine().trim();
         switch (s) {
-            case "2": return "Deluxe";
-            case "3": return "Suite";
-            default:  return "Standard";
+            case "2": return "Deluxe Room";
+            case "3": return "Suite Room";
+            default:  return "Standard Room";
         }
     }
 

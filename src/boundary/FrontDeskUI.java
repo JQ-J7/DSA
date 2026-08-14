@@ -70,16 +70,16 @@ public class FrontDeskUI {
 
     public String inputRoomType() {
         System.out.println("\nSelect Room Type:");
-        System.out.println(" [1] Standard");
-        System.out.println(" [2] Deluxe");
-        System.out.println(" [3] Suite");
+        System.out.println(" [1] Standard Room");
+        System.out.println(" [2] Deluxe Room");
+        System.out.println(" [3] Suite Room");
         System.out.print("Select Choice [1-3]: ");
-        if (!scanner.hasNextLine()) return "Standard";
+        if (!scanner.hasNextLine()) return "Standard Room";
         String choice = scanner.nextLine().trim();
         switch (choice) {
-            case "2": return "Deluxe";
-            case "3": return "Suite";
-            default:  return "Standard";
+            case "2": return "Deluxe Room";
+            case "3": return "Suite Room";
+            default:  return "Standard Room";
         }
     }
 

@@ -71,15 +71,15 @@ public class HousekeepingUI {
 
     public String inputRoomType() {
         System.out.println("\nSelect Room Type:");
-        System.out.println(" [1] Standard Deluxe");
-        System.out.println(" [2] Executive Suite");
-        System.out.println(" [3] Presidential Suite");
+        System.out.println(" [1] Standard Room");
+        System.out.println(" [2] Deluxe Room");
+        System.out.println(" [3] Suite Room");
         System.out.print("Select Choice [1-3]: ");
         String choice = scanner.hasNextLine() ? scanner.nextLine().trim() : "1";
         switch (choice) {
-            case "2": return "Executive Suite";
-            case "3": return "Presidential Suite";
-            default: return "Standard Deluxe";
+            case "2": return "Deluxe Room";
+            case "3": return "Suite Room";
+            default: return "Standard Room";
         }
     }
 
