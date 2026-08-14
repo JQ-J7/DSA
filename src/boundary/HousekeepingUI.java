@@ -17,7 +17,7 @@ public class HousekeepingUI {
         System.out.println("               TARUMT RESORTS - HOUSEKEEPING & TASK LOG                   ");
         System.out.println("==========================================================================");
         System.out.println(" --- [ TASK OPERATIONS ] ---");
-        System.out.println(" [1] View All Rooms & Current Statuses");
+        System.out.println(" [1] View Table of Room ID, Staff ID & Task Statuses");
         System.out.println(" [2] Assign New Cleaning Task to Staff");
         System.out.println(" [3] Update Sequential Cleaning Status (Dirty -> Cleaning -> Inspected -> Ready)");
         System.out.println(" [4] Rollback / Undo Status Change (Stack ADT - Undo mistakes / Late Check-Out)");
@@ -97,24 +97,29 @@ public class HousekeepingUI {
     }
 
     public int selectNextStatusChoice(String currentStatus) {
+        String status = (currentStatus == null) ? "" : currentStatus.trim().toLowerCase();
         System.out.println("\n--------------------------------------------------------------------------");
         System.out.println(" Current Room Task Status: [" + currentStatus + "]");
         System.out.println(" Workflow: [Dirty] -> [Cleaning In Progress] -> [Inspected] -> [Ready for Check-In]");
         System.out.println("--------------------------------------------------------------------------");
         System.out.println("Select New Status Step:");
         
-        if ("Dirty".equalsIgnoreCase(currentStatus)) {
+        if (status.contains("dirty")) {
             System.out.println(" [1] Cleaning In Progress  <-- (RECOMMENDED NEXT STEP)");
             System.out.println(" [2] Inspected");
             System.out.println(" [3] Ready for Check-In");
-        } else if ("Cleaning In Progress".equalsIgnoreCase(currentStatus)) {
-            System.out.println(" [1] Cleaning In Progress");
+        } else if (status.contains("cleaning")) {
+            System.out.println(" [1] Cleaning In Progress  (Current Status)");
             System.out.println(" [2] Inspected             <-- (RECOMMENDED NEXT STEP)");
             System.out.println(" [3] Ready for Check-In");
-        } else if ("Inspected".equalsIgnoreCase(currentStatus)) {
+        } else if (status.contains("inspect")) {
+            System.out.println(" [1] Cleaning In Progress");
+            System.out.println(" [2] Inspected             (Current Status)");
+            System.out.println(" [3] Ready for Check-In    <-- (RECOMMENDED NEXT STEP)");
+        } else if (status.contains("ready")) {
             System.out.println(" [1] Cleaning In Progress");
             System.out.println(" [2] Inspected");
-            System.out.println(" [3] Ready for Check-In    <-- (RECOMMENDED NEXT STEP)");
+            System.out.println(" [3] Ready for Check-In    (Current Status - Workflow Completed)");
         } else {
             System.out.println(" [1] Cleaning In Progress");
             System.out.println(" [2] Inspected");
@@ -181,6 +186,21 @@ public class HousekeepingUI {
 
     public void displayFooter() {
         System.out.println("--------------------------------------------------------------------------");
+    }
+
+    public static void displayRoomTable(adt.ListInterface<entity.Room> roomList) {
+        System.out.println(String.format("%-6s | %-10s | %-12s | %-24s | %-18s | %-8s", 
+                "No.", "Room ID", "Staff ID", "Current Status", "Room Type", "Floor"));
+        System.out.println("--------------------------------------------------------------------------------------------------");
+        if (roomList != null) {
+            for (int i = 1; i <= roomList.getNumberOfEntries(); i++) {
+                entity.Room r = roomList.getEntry(i);
+                String staff = (r.getAssignedStaffId() == null || r.getAssignedStaffId().trim().isEmpty()) ? "Unassigned" : r.getAssignedStaffId();
+                System.out.println(String.format("%-6d | %-10s | %-12s | %-24s | %-18s | Floor %-2d",
+                        i, r.getRoomId(), staff, r.getCurrentStatus(), r.getRoomType(), r.getFloorNumber()));
+            }
+        }
+        System.out.println("--------------------------------------------------------------------------------------------------");
     }
 }
 

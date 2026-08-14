@@ -31,42 +31,181 @@ public class HousekeepingControl {
         roomList = dao.retrieveRoomsFromFile();
         taskList = dao.retrieveTasksFromFile();
 
-        // Populate default demo data if list is empty
-        if (roomList.isEmpty() || taskList.isEmpty()) {
-            initializeDemoData();
+        // Deduplicate loaded data
+        deduplicateData();
+
+        // Ensure constant 15 rooms (R101-R305) exist
+        sanitizeConstantRooms();
+
+        // Ensure default tasks exist
+        if (taskList.isEmpty()) {
+            addDefaultDemoTasks();
         }
     }
 
-    private void initializeDemoData() {
-        roomList.add(new Room("R101", "Standard Deluxe", 1, "Dirty", "ST101"));
-        roomList.add(new Room("R102", "Standard Deluxe", 1, "Cleaning In Progress", "ST102"));
-        roomList.add(new Room("R201", "Executive Suite", 2, "Inspected", "ST101"));
-        roomList.add(new Room("R202", "Executive Suite", 2, "Ready for Check-In", "ST103"));
-        roomList.add(new Room("R301", "Presidential Suite", 3, "Dirty", "ST104"));
+    private void deduplicateData() {
+        boolean roomsChanged = false;
+        ListInterface<Room> cleanRoomList = new ArrayList<>();
+        for (int i = 1; i <= roomList.getNumberOfEntries(); i++) {
+            Room r = roomList.getEntry(i);
+            boolean exists = false;
+            for (int j = 1; j <= cleanRoomList.getNumberOfEntries(); j++) {
+                if (cleanRoomList.getEntry(j).getRoomId().equalsIgnoreCase(r.getRoomId())) {
+                    exists = true;
+                    break;
+                }
+            }
+            if (!exists) {
+                cleanRoomList.add(r);
+            } else {
+                roomsChanged = true;
+            }
+        }
+        if (roomsChanged) {
+            roomList = cleanRoomList;
+            dao.saveRoomsToFile(roomList);
+        }
+
+        boolean tasksChanged = false;
+        ListInterface<HousekeepingTask> cleanTaskList = new ArrayList<>();
+        for (int i = 1; i <= taskList.getNumberOfEntries(); i++) {
+            HousekeepingTask t = taskList.getEntry(i);
+            boolean exists = false;
+            for (int j = 1; j <= cleanTaskList.getNumberOfEntries(); j++) {
+                if (cleanTaskList.getEntry(j).getTaskId().equalsIgnoreCase(t.getTaskId())) {
+                    exists = true;
+                    break;
+                }
+            }
+            if (!exists) {
+                cleanTaskList.add(t);
+            } else {
+                tasksChanged = true;
+            }
+        }
+        if (tasksChanged) {
+            taskList = cleanTaskList;
+            dao.saveTasksToFile(taskList);
+        }
+    }
+
+    private void sanitizeConstantRooms() {
+        addDefaultDemoRooms();
+        ListInterface<Room> sanitizedList = new ArrayList<>();
+        boolean changed = false;
+        for (int i = 1; i <= roomList.getNumberOfEntries(); i++) {
+            Room r = roomList.getEntry(i);
+            if (isValidConstantRoomId(r.getRoomId())) {
+                sanitizedList.add(r);
+            } else {
+                changed = true;
+            }
+        }
+        if (changed || sanitizedList.getNumberOfEntries() < 15) {
+            roomList = sanitizedList;
+            addDefaultDemoRooms();
+        }
         dao.saveRoomsToFile(roomList);
+    }
 
+    private boolean isValidConstantRoomId(String roomId) {
+        if (roomId == null) return false;
+        String id = roomId.toUpperCase();
+        return id.matches("R[1-3]0[1-5]");
+    }
+
+    private void initializeDemoData() {
+        roomList.clear();
+        taskList.clear();
+        addDefaultDemoRooms();
+        addDefaultDemoTasks();
+    }
+
+    private void addDefaultDemoRooms() {
+        Room[] constantRooms = new Room[] {
+            // Floor 1: 1 Presidential Suite, 2 Executive Suites, 2 Standard Deluxe
+            new Room("R101", "Presidential Suite", 1, "Dirty", "ST101"),
+            new Room("R102", "Executive Suite", 1, "Cleaning In Progress", "ST102"),
+            new Room("R103", "Executive Suite", 1, "Inspected", "ST103"),
+            new Room("R104", "Standard Deluxe", 1, "Ready for Check-In", "ST104"),
+            new Room("R105", "Standard Deluxe", 1, "Ready for Check-In", "ST105"),
+
+            // Floor 2: 1 Presidential Suite, 2 Executive Suites, 2 Standard Deluxe
+            new Room("R201", "Presidential Suite", 2, "Dirty", "ST201"),
+            new Room("R202", "Executive Suite", 2, "Cleaning In Progress", "ST202"),
+            new Room("R203", "Executive Suite", 2, "Inspected", "ST203"),
+            new Room("R204", "Standard Deluxe", 2, "Ready for Check-In", "ST204"),
+            new Room("R205", "Standard Deluxe", 2, "Ready for Check-In", "ST205"),
+
+            // Floor 3: 1 Presidential Suite, 2 Executive Suites, 2 Standard Deluxe
+            new Room("R301", "Presidential Suite", 3, "Dirty", "ST301"),
+            new Room("R302", "Executive Suite", 3, "Cleaning In Progress", "ST302"),
+            new Room("R303", "Executive Suite", 3, "Inspected", "ST303"),
+            new Room("R304", "Standard Deluxe", 3, "Ready for Check-In", "ST304"),
+            new Room("R305", "Standard Deluxe", 3, "Ready for Check-In", "ST305")
+        };
+        for (Room r : constantRooms) {
+            Room existing = findRoomById(r.getRoomId());
+            if (existing == null) {
+                roomList.add(r);
+            } else {
+                existing.setRoomType(r.getRoomType());
+                existing.setFloorNumber(r.getFloorNumber());
+            }
+        }
+        dao.saveRoomsToFile(roomList);
+    }
+
+    private void addDefaultDemoTasks() {
         String now = LocalDateTime.now().format(dtf);
-        HousekeepingTask t1 = new HousekeepingTask("TSK-1001", "R101", "ST101", "Dirty", now);
-        HousekeepingTask t2 = new HousekeepingTask("TSK-1002", "R102", "ST102", "Dirty", now);
-        t2.updateStatus("Cleaning In Progress", "ST102", now, "Staff started cleaning");
+        int taskCounter = 1001;
 
-        HousekeepingTask t3 = new HousekeepingTask("TSK-1003", "R201", "ST101", "Dirty", now);
-        t3.updateStatus("Cleaning In Progress", "ST101", now, "Staff started cleaning");
-        t3.updateStatus("Inspected", "SUP-01", now, "Supervisor inspection completed");
+        Room[] defaultRooms = new Room[] {
+            new Room("R101", "Presidential Suite", 1, "Dirty", "ST101"),
+            new Room("R102", "Executive Suite", 1, "Cleaning In Progress", "ST102"),
+            new Room("R103", "Executive Suite", 1, "Inspected", "ST103"),
+            new Room("R104", "Standard Deluxe", 1, "Ready for Check-In", "ST104"),
+            new Room("R105", "Standard Deluxe", 1, "Ready for Check-In", "ST105"),
+            new Room("R201", "Presidential Suite", 2, "Dirty", "ST201"),
+            new Room("R202", "Executive Suite", 2, "Cleaning In Progress", "ST202"),
+            new Room("R203", "Executive Suite", 2, "Inspected", "ST203"),
+            new Room("R204", "Standard Deluxe", 2, "Ready for Check-In", "ST204"),
+            new Room("R205", "Standard Deluxe", 2, "Ready for Check-In", "ST205"),
+            new Room("R301", "Presidential Suite", 3, "Dirty", "ST301"),
+            new Room("R302", "Executive Suite", 3, "Cleaning In Progress", "ST302"),
+            new Room("R303", "Executive Suite", 3, "Inspected", "ST303"),
+            new Room("R304", "Standard Deluxe", 3, "Ready for Check-In", "ST304"),
+            new Room("R305", "Standard Deluxe", 3, "Ready for Check-In", "ST305")
+        };
 
-        HousekeepingTask t4 = new HousekeepingTask("TSK-1004", "R202", "ST103", "Dirty", now);
-        t4.updateStatus("Cleaning In Progress", "ST103", now, "Staff started cleaning");
-        t4.updateStatus("Inspected", "SUP-01", now, "Supervisor inspection passed");
-        t4.updateStatus("Ready for Check-In", "SUP-01", now, "Released for guest check-in");
-
-        HousekeepingTask t5 = new HousekeepingTask("TSK-1005", "R301", "ST104", "Dirty", now);
-
-        taskList.add(t1);
-        taskList.add(t2);
-        taskList.add(t3);
-        taskList.add(t4);
-        taskList.add(t5);
+        for (Room r : defaultRooms) {
+            String taskId = "TSK-" + taskCounter++;
+            if (findActiveTaskByRoomId(r.getRoomId()) == null) {
+                HousekeepingTask task = new HousekeepingTask(taskId, r.getRoomId(), r.getAssignedStaffId(), "Dirty", now);
+                if ("Cleaning In Progress".equals(r.getCurrentStatus())) {
+                    task.updateStatus("Cleaning In Progress", r.getAssignedStaffId(), now, "Staff started cleaning");
+                } else if ("Inspected".equals(r.getCurrentStatus())) {
+                    task.updateStatus("Cleaning In Progress", r.getAssignedStaffId(), now, "Staff started cleaning");
+                    task.updateStatus("Inspected", "SUP-01", now, "Supervisor inspection completed");
+                } else if ("Ready for Check-In".equals(r.getCurrentStatus())) {
+                    task.updateStatus("Cleaning In Progress", r.getAssignedStaffId(), now, "Staff started cleaning");
+                    task.updateStatus("Inspected", "SUP-01", now, "Supervisor inspection passed");
+                    task.updateStatus("Ready for Check-In", "SUP-01", now, "Released for guest check-in");
+                }
+                taskList.add(task);
+            }
+        }
         dao.saveTasksToFile(taskList);
+    }
+
+    private HousekeepingTask findTaskById(String taskId) {
+        for (int i = 1; i <= taskList.getNumberOfEntries(); i++) {
+            HousekeepingTask t = taskList.getEntry(i);
+            if (t.getTaskId().equalsIgnoreCase(taskId)) {
+                return t;
+            }
+        }
+        return null;
     }
 
     public void runHousekeepingSystem() {
@@ -104,22 +243,52 @@ public class HousekeepingControl {
         } while (choice != 0);
     }
 
+    public void displayRoomTaskTable() {
+        HousekeepingUI.displayRoomTable(roomList);
+    }
+
+    public ListInterface<Room> getRoomList() {
+        return roomList;
+    }
+
     public void displayAllRooms() {
-        ui.displayHeader("ALL HOTEL ROOMS & CURRENT STATUSES");
-        System.out.println(String.format("%-6s | %-8s | %-18s | %-6s | %-22s | %-10s", 
-                "No.", "Room ID", "Room Type", "Floor", "Current Status", "Staff ID"));
-        System.out.println("--------------------------------------------------------------------------");
-        for (int i = 1; i <= roomList.getNumberOfEntries(); i++) {
-            Room r = roomList.getEntry(i);
-            System.out.println(String.format("%-6d | %-8s | %-18s | Floor %-2d | %-22s | %-10s",
-                    i, r.getRoomId(), r.getRoomType(), r.getFloorNumber(), r.getCurrentStatus(), r.getAssignedStaffId()));
-        }
-        ui.displayFooter();
+        ui.displayHeader("ALL HOTEL ROOMS & TASK STATUSES (TABLE OF ROOM ID, STAFF ID & STATUS)");
+        displayRoomTaskTable();
         ui.pressEnterToContinue();
+    }
+
+    public void displayStaffTable() {
+        System.out.println("\n--------------------------------------------------------------------------------------------------");
+        System.out.println("                                HOUSEKEEPING STAFF ROSTER TABLE                                  ");
+        System.out.println("--------------------------------------------------------------------------------------------------");
+        System.out.println(String.format("%-6s | %-10s | %-22s | %-24s | %-15s", 
+                "No.", "Staff ID", "Staff Name", "Role / Designation", "Assigned Floor"));
+        System.out.println("--------------------------------------------------------------------------------------------------");
+        System.out.println(String.format("%-6d | %-10s | %-22s | %-24s | %-15s", 1, "ST101", "Ahmad Razali", "Senior Housekeeper", "Floor 1"));
+        System.out.println(String.format("%-6d | %-10s | %-22s | %-24s | %-15s", 2, "ST102", "Siti Nurhaliza", "Housekeeping Attendant", "Floor 1"));
+        System.out.println(String.format("%-6d | %-10s | %-22s | %-24s | %-15s", 3, "ST103", "Tan Ah Kow", "Housekeeping Attendant", "Floor 1"));
+        System.out.println(String.format("%-6d | %-10s | %-22s | %-24s | %-15s", 4, "ST104", "Murali Vijay", "Junior Attendant", "Floor 1"));
+        System.out.println(String.format("%-6d | %-10s | %-22s | %-24s | %-15s", 5, "ST105", "Lee Chong Wei", "Junior Attendant", "Floor 1"));
+        System.out.println(String.format("%-6d | %-10s | %-22s | %-24s | %-15s", 6, "ST201", "Wong Mei Ling", "Senior Housekeeper", "Floor 2"));
+        System.out.println(String.format("%-6d | %-10s | %-22s | %-24s | %-15s", 7, "ST202", "Devi Ananda", "Housekeeping Attendant", "Floor 2"));
+        System.out.println(String.format("%-6d | %-10s | %-22s | %-24s | %-15s", 8, "ST203", "Kassim Selamat", "Housekeeping Attendant", "Floor 2"));
+        System.out.println(String.format("%-6d | %-10s | %-22s | %-24s | %-15s", 9, "ST204", "Chan Xian Feng", "Junior Attendant", "Floor 2"));
+        System.out.println(String.format("%-6d | %-10s | %-22s | %-24s | %-15s", 10, "ST205", "Kavitha Raj", "Junior Attendant", "Floor 2"));
+        System.out.println(String.format("%-6d | %-10s | %-22s | %-24s | %-15s", 11, "ST301", "Subramaniam K", "Senior Housekeeper", "Floor 3"));
+        System.out.println(String.format("%-6d | %-10s | %-22s | %-24s | %-15s", 12, "ST302", "Farida Begum", "Housekeeping Attendant", "Floor 3"));
+        System.out.println(String.format("%-6d | %-10s | %-22s | %-24s | %-15s", 13, "ST303", "Jason Leong", "Housekeeping Attendant", "Floor 3"));
+        System.out.println(String.format("%-6d | %-10s | %-22s | %-24s | %-15s", 14, "ST304", "Nurul Izzah", "Junior Attendant", "Floor 3"));
+        System.out.println(String.format("%-6d | %-10s | %-22s | %-24s | %-15s", 15, "ST305", "Lim Guan Eng", "Junior Attendant", "Floor 3"));
+        System.out.println(String.format("%-6d | %-10s | %-22s | %-24s | %-15s", 16, "SUP-01", "Rosmah Mansor", "Housekeeping Supervisor", "All Floors"));
+        System.out.println("--------------------------------------------------------------------------------------------------");
     }
 
     public void assignNewCleaningTask() {
         ui.displayHeader("ASSIGN NEW HOUSEKEEPING CLEANING TASK");
+        System.out.println("--- CURRENT ROOM ID, STAFF ID & STATUS TABLE ---");
+        displayRoomTaskTable();
+        System.out.println();
+
         String roomId = ui.inputRoomId();
         if (roomId.isEmpty()) {
             ui.displayMessage("Operation cancelled.");
@@ -129,18 +298,13 @@ public class HousekeepingControl {
         // Check if room exists
         Room room = findRoomById(roomId);
         if (room == null) {
-            System.out.println("Room " + roomId + " is not registered yet. Creating new room record...");
-            String roomType = ui.inputRoomType();
-            int floor = ui.inputFloorNumber();
-            String staffId = ui.inputStaffId();
-            if (staffId.isEmpty()) {
-                ui.displayMessage("Operation cancelled.");
-                return;
-            }
-            room = new Room(roomId, roomType, floor, "Dirty", staffId);
-            roomList.add(room);
-            dao.saveRoomsToFile(roomList);
+            ui.displayMessage("ERROR: Room " + roomId + " is unknown / not registered in the system! You cannot assign a task to an unknown room.");
+            ui.pressEnterToContinue();
+            return;
         }
+
+        // Display Staff Roster Table before asking for Staff ID
+        displayStaffTable();
 
         String staffId = ui.inputStaffId();
         if (staffId.isEmpty()) {
@@ -165,6 +329,10 @@ public class HousekeepingControl {
 
     public void updateCleaningStatus() {
         ui.displayHeader("UPDATE SEQUENTIAL CLEANING STATUS");
+        System.out.println("--- CURRENT ROOM ID, STAFF ID & STATUS TABLE ---");
+        displayRoomTaskTable();
+        System.out.println();
+
         String roomId = ui.inputRoomId();
         if (roomId.isEmpty()) {
             ui.displayMessage("Operation cancelled.");
@@ -207,10 +375,7 @@ public class HousekeepingControl {
             return;
         }
 
-        String updatedBy = ui.inputStaffId();
-        if (updatedBy.isEmpty()) {
-            updatedBy = task.getStaffId();
-        }
+        String updatedBy = (task.getStaffId() == null || task.getStaffId().trim().isEmpty()) ? "UNASSIGNED" : task.getStaffId();
         String reason = ui.inputReason();
         if (reason.isEmpty()) {
             reason = "Standard status progression";
@@ -234,6 +399,10 @@ public class HousekeepingControl {
 
     public void rollbackTaskStatus() {
         ui.displayHeader("ROLLBACK / UNDO TASK STATUS (STACK ADT)");
+        System.out.println("--- CURRENT ROOM ID, STAFF ID & STATUS TABLE ---");
+        displayRoomTaskTable();
+        System.out.println();
+
         String roomId = ui.inputRoomId();
         if (roomId.isEmpty()) {
             ui.displayMessage("Operation cancelled.");
@@ -319,11 +488,16 @@ public class HousekeepingControl {
         ui.displayHeader("SEARCH RESULTS FOR: " + query);
         boolean found = false;
 
+        System.out.println(String.format("%-10s | %-10s | %-12s | %-24s | %-20s", 
+                "Task ID", "Room ID", "Staff ID", "Current Status", "Last Updated"));
+        System.out.println("--------------------------------------------------------------------------------------------------");
+
         // Custom Linear Search Algorithm
         for (int i = 1; i <= taskList.getNumberOfEntries(); i++) {
             HousekeepingTask task = taskList.getEntry(i);
             if (task.getRoomId().equalsIgnoreCase(query) || task.getStaffId().equalsIgnoreCase(query)) {
-                System.out.println(task);
+                System.out.println(String.format("%-10s | %-10s | %-12s | %-24s | %-20s",
+                        task.getTaskId(), task.getRoomId(), task.getStaffId(), task.getCurrentStatus(), task.getLastUpdated()));
                 found = true;
             }
         }
