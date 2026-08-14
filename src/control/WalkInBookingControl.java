@@ -125,30 +125,49 @@ public class WalkInBookingControl {
         ui.displayHeader("REGISTER NEW WALK-IN / STANDARD BOOKING");
 
         int channelChoice = ui.inputBookingTypeChoice();
+        if (channelChoice == 0) {
+            ui.displayMessage("Registration cancelled.");
+            return;
+        }
         String bookingType = (channelChoice == 2) ? "Standard Advance" : "Walk-In";
 
-        String ic = ui.inputText("Enter Guest IC Number (e.g., 990101-14-1234): ");
-        if (ic.isEmpty()) {
-            ui.displayMessage("IC Number cannot be empty. Registration cancelled.");
+        String ic = ui.inputRequiredText("Enter Guest IC Number (e.g., 990101-14-1234) [0 to Back]: ", "IC Number cannot be empty. Please try again.");
+        if ("0".equals(ic)) {
+            ui.displayMessage("Registration cancelled.");
             return;
         }
 
-        String name = ui.inputText("Enter Guest Full Name: ");
-        if (name.isEmpty()) {
-            ui.displayMessage("Guest name cannot be empty. Registration cancelled.");
+        String name = ui.inputRequiredText("Enter Guest Full Name [0 to Back]: ", "Guest name cannot be empty. Please try again.");
+        if ("0".equals(name)) {
+            ui.displayMessage("Registration cancelled.");
             return;
         }
 
-        String contact = ui.inputText("Enter Contact Number (e.g., 012-3456789): ");
+        String contact = ui.inputRequiredText("Enter Contact Number (e.g., 012-3456789) [0 to Back]: ", "Contact number cannot be empty. Please try again.");
+        if ("0".equals(contact)) {
+            ui.displayMessage("Registration cancelled.");
+            return;
+        }
         Guest guest = new Guest(ic, name, contact);
 
         String roomType = ui.inputRoomType();
+        if ("CANCEL".equalsIgnoreCase(roomType)) {
+            ui.displayMessage("Registration cancelled.");
+            return;
+        }
         double rate = getRateForRoomType(roomType);
 
-        int nights = ui.inputInt("Enter Number of Nights to Stay: ");
-        if (nights <= 0) {
-            ui.displayMessage("Invalid stay duration. Registration cancelled.");
-            return;
+        int nights;
+        while (true) {
+            nights = ui.inputInt("Enter Number of Nights to Stay [0 to Back]: ");
+            if (nights == 0) {
+                ui.displayMessage("Registration cancelled.");
+                return;
+            }
+            if (nights > 0) {
+                break;
+            }
+            ui.displayMessage("Invalid stay duration! Number of nights must be greater than 0.");
         }
 
         String bookingId = "WB" + (nextBookingIdSuffix++);
@@ -221,7 +240,7 @@ public class WalkInBookingControl {
         Room matchedRoom = null;
         for (int i = 1; i <= roomList.getNumberOfEntries(); i++) {
             Room r = roomList.getEntry(i);
-            if (r.getRoomType().equalsIgnoreCase(nextBooking.getRequestedRoomType()) &&
+            if (isRoomTypeMatch(r.getRoomType(), nextBooking.getRequestedRoomType()) &&
                 "Ready for Check-In".equalsIgnoreCase(r.getCurrentStatus())) {
                 matchedRoom = r;
                 break;
@@ -265,8 +284,8 @@ public class WalkInBookingControl {
     private void cancelOrModifyBooking() {
         ui.displayHeader("CANCEL OR MODIFY PENDING REGISTRATION");
 
-        String queryId = ui.inputText("Enter Booking ID to Cancel/Modify (e.g., WB1001): ");
-        if (queryId.isEmpty()) return;
+        String queryId = ui.inputText("Enter Booking ID to Cancel/Modify (e.g., WB1001) [0 to Back]: ");
+        if (queryId.isEmpty() || "0".equals(queryId)) return;
 
         WalkInBooking booking = findBookingById(queryId);
         if (booking == null) {
@@ -286,7 +305,8 @@ public class WalkInBookingControl {
         System.out.println(" [1] Cancel Registration");
         System.out.println(" [2] Modify Requested Room Type");
         System.out.println(" [0] Go Back");
-        int choice = ui.inputInt("Select [0-2]: ");
+        int choice = ui.inputIntInRange("Select [0-2]: ", 0, 2);
+        if (choice == 0) return;
 
         if (choice == 1) {
             if (ui.confirmAction("Cancel registration for " + booking.getBookingId() + "?")) {
@@ -297,10 +317,12 @@ public class WalkInBookingControl {
             }
         } else if (choice == 2) {
             String newRoomType = ui.inputRoomType();
-            booking.setRequestedRoomType(newRoomType);
-            booking.setEstimatedRatePerNight(getRateForRoomType(newRoomType));
-            bookingDAO.saveBookingsToFile(allBookings);
-            ui.displayMessage("Room type updated to '" + newRoomType + "' for " + booking.getBookingId() + ".");
+            if (!"CANCEL".equalsIgnoreCase(newRoomType)) {
+                booking.setRequestedRoomType(newRoomType);
+                booking.setEstimatedRatePerNight(getRateForRoomType(newRoomType));
+                bookingDAO.saveBookingsToFile(allBookings);
+                ui.displayMessage("Room type updated to '" + newRoomType + "' for " + booking.getBookingId() + ".");
+            }
         }
     }
 
@@ -316,27 +338,35 @@ public class WalkInBookingControl {
         System.out.println(" [2] Search by Guest IC Number (Linear Search)");
         System.out.println(" [3] Search by Guest Name Keyword (Sub-string Search)");
         System.out.println(" [4] Binary Search by Booking ID (Requires Sorted Array)");
-        System.out.print("Select Search Option [1-4]: ");
-        int choice = ui.inputInt("");
+        System.out.println(" [0] Back to Walk-In Booking Menu");
+        System.out.print("Select Search Option [0-4]: ");
+        int choice = ui.inputIntInRange("Select Search Option [0-4]: ", 0, 4);
+
+        if (choice == 0) return;
 
         if (choice == 1) {
-            String id = ui.inputText("Enter Booking ID: ");
+            String id = ui.inputRequiredText("Enter Booking ID [0 to Back]: ", "Booking ID cannot be empty.");
+            if ("0".equals(id)) return;
             WalkInBooking found = findBookingById(id);
             displaySearchResult(found);
         } else if (choice == 2) {
-            String ic = ui.inputText("Enter Guest IC Number: ");
+            String ic = ui.inputRequiredText("Enter Guest IC Number [0 to Back]: ", "IC Number cannot be empty.");
+            if ("0".equals(ic)) return;
             WalkInBooking found = findBookingByIC(ic);
             displaySearchResult(found);
         } else if (choice == 3) {
-            String nameKey = ui.inputText("Enter Guest Name Keyword: ");
+            String nameKey = ui.inputRequiredText("Enter Guest Name Keyword [0 to Back]: ", "Search keyword cannot be empty.");
+            if ("0".equals(nameKey)) return;
             ListInterface<WalkInBooking> results = searchBookingsByName(nameKey);
             displaySearchResultsList(results);
         } else if (choice == 4) {
-            String id = ui.inputText("Enter Booking ID for Binary Search: ");
+            String id = ui.inputRequiredText("Enter Booking ID for Binary Search [0 to Back]: ", "Booking ID cannot be empty.");
+            if ("0".equals(id)) return;
             WalkInBooking found = binarySearchById(id);
             displaySearchResult(found);
         } else {
             ui.displayMessage("Invalid search option.");
+            return;
         }
 
         ui.pressEnterToContinue();
@@ -452,8 +482,10 @@ public class WalkInBookingControl {
         System.out.println(" [1] All Registrations");
         System.out.println(" [2] Pending WAITING Guests Only");
         System.out.println(" [3] ALLOCATED Guests Only");
-        System.out.print("Select Filter Criteria [1-3]: ");
-        int filterChoice = ui.inputInt("");
+        System.out.println(" [0] Back to Walk-In Booking Menu");
+        System.out.print("Select Filter Criteria [0-3]: ");
+        int filterChoice = ui.inputIntInRange("Select Filter Criteria [0-3]: ", 0, 3);
+        if (filterChoice == 0) return;
 
         ListInterface<WalkInBooking> filteredList = new ArrayList<>();
         for (int i = 1; i <= allBookings.getNumberOfEntries(); i++) {
@@ -519,8 +551,10 @@ public class WalkInBookingControl {
         System.out.println(" [1] All Channels (Walk-In & Standard Advance)");
         System.out.println(" [2] Walk-In Guests Only");
         System.out.println(" [3] Standard Advance Bookings Only");
-        System.out.print("Select Filter [1-3]: ");
-        int channelFilter = ui.inputInt("");
+        System.out.println(" [0] Back to Walk-In Booking Menu");
+        System.out.print("Select Filter [0-3]: ");
+        int channelFilter = ui.inputIntInRange("Select Filter [0-3]: ", 0, 3);
+        if (channelFilter == 0) return;
 
         ListInterface<WalkInBooking> filteredList = new ArrayList<>();
         for (int i = 1; i <= allBookings.getNumberOfEntries(); i++) {
@@ -634,5 +668,12 @@ public class WalkInBookingControl {
         if (roomType != null && roomType.toLowerCase().contains("deluxe")) return 350.00;
         if (roomType != null && roomType.toLowerCase().contains("suite")) return 600.00;
         return 200.00; // Standard Room
+    }
+
+    private boolean isRoomTypeMatch(String type1, String type2) {
+        if (type1 == null || type2 == null) return false;
+        String t1 = type1.toLowerCase().replace("room", "").trim();
+        String t2 = type2.toLowerCase().replace("room", "").trim();
+        return t1.equals(t2);
     }
 }
