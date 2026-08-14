@@ -69,17 +69,23 @@ public class FrontDeskUI {
     }
 
     public String inputRoomType() {
-        System.out.println("\nSelect Room Type:");
-        System.out.println(" [1] Standard");
-        System.out.println(" [2] Deluxe");
-        System.out.println(" [3] Suite");
-        System.out.print("Select Choice [1-3]: ");
-        if (!scanner.hasNextLine()) return "Standard";
-        String choice = scanner.nextLine().trim();
-        switch (choice) {
-            case "2": return "Deluxe";
-            case "3": return "Suite";
-            default:  return "Standard";
+        while (true) {
+            System.out.println("\nSelect Room Type:");
+            System.out.println(" [1] Standard");
+            System.out.println(" [2] Deluxe");
+            System.out.println(" [3] Suite");
+            System.out.println(" [0] Cancel");
+            System.out.print("Select Choice [1-3] or [0] to Cancel: ");
+            if (!scanner.hasNextLine()) return "";
+            String choice = scanner.nextLine().trim();
+            switch (choice) {
+                case "1": return "Standard";
+                case "2": return "Deluxe";
+                case "3": return "Suite";
+                case "0": return "";
+                default:
+                    System.out.println("\nInvalid choice! Please enter a valid option (1, 2, 3, or 0).");
+            }
         }
     }
 

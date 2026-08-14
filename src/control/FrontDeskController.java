@@ -3,6 +3,7 @@ package control;
 import adt.HashMap;
 import adt.MapInterface;
 import boundary.FrontDeskUI;
+import dao.FrontDeskDAO;
 import entity.Guest;
 import entity.Reservation;
 import entity.Room;
@@ -25,6 +26,7 @@ public class FrontDeskController {
     // Value = Reservation object
     // -------------------------------------------------------------------------
     private MapInterface<String, Reservation> reservationsMap;
+    private FrontDeskDAO dao = new FrontDeskDAO();
 
     // Separate array for room inventory
     private Room[] rooms;
@@ -37,10 +39,29 @@ public class FrontDeskController {
     // =========================================================================
 
     public FrontDeskController() {
-        reservationsMap = new HashMap<>();
         ui = new FrontDeskUI();
         nextConfirmationSuffix = 5;
-        initHardcodedData();
+        initRoomInventory();
+
+        // Load reservations from binary file via DAO
+        reservationsMap = dao.retrieveReservationsFromFile();
+
+        // Populate default demo data if map is empty
+        if (reservationsMap.isEmpty()) {
+            initHardcodedData();
+        }
+    }
+
+    private void initRoomInventory() {
+        rooms = new Room[]{
+            new Room("101", "Standard", 1, "Occupied",           ""),
+            new Room("102", "Standard", 1, "Ready for Check-In", ""),
+            new Room("201", "Deluxe",   2, "Occupied",           ""),
+            new Room("202", "Deluxe",   2, "Ready for Check-In", ""),
+            new Room("203", "Deluxe",   2, "Ready for Check-In", ""),
+            new Room("301", "Suite",    3, "Occupied",           ""),
+            new Room("302", "Suite",    3, "Ready for Check-In", "")
+        };
     }
 
     /**
@@ -90,6 +111,9 @@ public class FrontDeskController {
         reservationsMap.put(r2.getConfirmationNumber(), r2);
         reservationsMap.put(r3.getConfirmationNumber(), r3);
         reservationsMap.put(r4.getConfirmationNumber(), r4);
+
+        // Persist initial data to file via DAO
+        dao.saveReservationsToFile(reservationsMap);
     }
 
     // =========================================================================
@@ -189,6 +213,10 @@ public class FrontDeskController {
     private void checkRoomAvailability() {
         ui.displayHeader("ROOM AVAILABILITY QUERY");
         String type = ui.inputRoomType();
+        if (type.isEmpty()) {
+            ui.displayMessage("Operation cancelled.");
+            return;
+        }
 
         System.out.println();
         System.out.printf("%-8s | %-15s | %-6s | %-22s%n",
@@ -297,6 +325,7 @@ public class FrontDeskController {
 
         // INSERT into HashMap — key = confirmation number
         reservationsMap.put(confNum, newRes);
+        dao.saveReservationsToFile(reservationsMap);
 
         ui.displayMessage("Check-In successful!\nConfirmation Number: " + confNum +
                           "\nGuest: " + name + " | Room: " + roomId);
@@ -362,6 +391,7 @@ public class FrontDeskController {
             default:
                 MessageUI.displayInvalidChoiceMessage();
         }
+        dao.saveReservationsToFile(reservationsMap);
         ui.pressEnterToContinue();
     }
 
@@ -411,6 +441,7 @@ public class FrontDeskController {
 
         // REMOVE from active HashMap
         reservationsMap.remove(confNum);
+        dao.saveReservationsToFile(reservationsMap);
 
         ui.displayMessage("Check-out successful for " + res.getGuest().getName() +
                 ".\nRoom " + (room != null ? room.getRoomId() : "N/A") + " is now Dirty (pending housekeeping).\nPayment collected: RM" +
