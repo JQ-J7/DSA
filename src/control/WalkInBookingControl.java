@@ -42,11 +42,7 @@ public class WalkInBookingControl {
             initDefaultRooms();
         }
 
-        if (allBookings.isEmpty()) {
-            initDemoData();
-        } else {
-            rebuildWaitingQueue();
-        }
+        rebuildWaitingQueue();
     }
 
     private void initDefaultRooms() {
@@ -58,32 +54,6 @@ public class WalkInBookingControl {
         housekeepingDAO.saveRoomsToFile(roomList);
     }
 
-    private void initDemoData() {
-        String t1 = LocalDateTime.now().minusHours(3).format(dtf);
-        String t2 = LocalDateTime.now().minusHours(2).format(dtf);
-        String t3 = LocalDateTime.now().minusHours(1).format(dtf);
-
-        Guest g1 = new Guest("980512-14-6677", "Tan Ah Kow", "012-1113333");
-        Guest g2 = new Guest("000315-10-8899", "Sarah Lee", "017-8889999");
-        Guest g3 = new Guest("921104-08-1234", "David Muthu", "019-4445555");
-        Guest g4 = new Guest("850920-01-5432", "Jessica Wong", "016-3332222");
-
-        WalkInBooking b1 = new WalkInBooking("WB1001", g1, "Standard", 2, 200.00, t1, "Walk-In", "WAITING");
-        WalkInBooking b2 = new WalkInBooking("WB1002", g2, "Deluxe", 3, 350.00, t2, "Standard Advance", "WAITING");
-        WalkInBooking b3 = new WalkInBooking("WB1003", g3, "Suite", 1, 600.00, t3, "Walk-In", "WAITING");
-        WalkInBooking b4 = new WalkInBooking("WB1004", g4, "Standard", 4, 200.00, t3, "Standard Advance", "WAITING");
-
-        allBookings.add(b1);
-        allBookings.add(b2);
-        allBookings.add(b3);
-        allBookings.add(b4);
-
-        nextBookingIdSuffix = 1005;
-
-        bookingDAO.saveBookingsToFile(allBookings);
-        rebuildWaitingQueue();
-    }
-
     private void rebuildWaitingQueue() {
         waitingQueue.clear();
         for (int i = 1; i <= allBookings.getNumberOfEntries(); i++) {
@@ -92,6 +62,24 @@ public class WalkInBookingControl {
                 waitingQueue.enqueue(b);
             }
         }
+        updateNextBookingIdSuffix();
+    }
+
+    private void updateNextBookingIdSuffix() {
+        int maxSuffix = 1000;
+        for (int i = 1; i <= allBookings.getNumberOfEntries(); i++) {
+            WalkInBooking b = allBookings.getEntry(i);
+            if (b != null && b.getBookingId() != null && b.getBookingId().toUpperCase().startsWith("WB")) {
+                try {
+                    int num = Integer.parseInt(b.getBookingId().substring(2));
+                    if (num > maxSuffix) {
+                        maxSuffix = num;
+                    }
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        }
+        nextBookingIdSuffix = maxSuffix + 1;
     }
 
     public void runWalkInBookingSystem() {
