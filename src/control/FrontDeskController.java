@@ -1,32 +1,50 @@
 package control;
 
+import adt.ArrayList;
 import adt.HashMap;
+import adt.ListInterface;
 import adt.MapInterface;
 import boundary.FrontDeskUI;
 import boundary.HousekeepingUI;
+import dao.FrontDeskDAO;
+import dao.HousekeepingDAO;
 import entity.Guest;
 import entity.Reservation;
 import entity.Room;
 import utility.MessageUI;
 
+/**
+ * Controller for the Front-Desk Service subsystem.
+ * Implements full CRUD on a custom HashMap (Non-Linear ADT) keyed by
+ * 8-digit confirmation number, plus searching and management reports.
+ *
+ * ECB Pattern: This class serves as the Control layer.
+ *
+ * @author Mun Jun How
+ */
 public class FrontDeskController {
 
-    private MapInterface<String, Reservation> reservationsMap;
-    private adt.ListInterface<Room> roomList = new adt.ArrayList<>();
-    private dao.HousekeepingDAO housekeepingDAO = new dao.HousekeepingDAO();
+    // -------------------------------------------------------------------------
+    // Non-Linear ADT: Custom HashMap<String, Reservation>
+    // Key   = 8-digit Confirmation Number (for O(1) lookup)
+    // Value = Reservation object
+    // -------------------------------------------------------------------------
+    private MapInterface<String, Reservation> reservationsMap = new HashMap<>();
+    private ListInterface<Room> roomList = new ArrayList<>();
 
-    private FrontDeskUI ui;
-    private int nextConfirmationSuffix; // Used to generate unique 8-digit IDs
+    private FrontDeskDAO dao = new FrontDeskDAO();
+    private HousekeepingDAO housekeepingDAO = new HousekeepingDAO();
+    private FrontDeskUI ui = new FrontDeskUI();
+    private int nextConfirmationSuffix = 5; // Used to generate unique 8-digit IDs
 
     // =========================================================================
     // CONSTRUCTOR & DATA INITIALISATION
     // =========================================================================
 
     public FrontDeskController() {
-        reservationsMap = new HashMap<>();
         ui = new FrontDeskUI();
         nextConfirmationSuffix = 5;
-        
+
         // Synchronize with shared rooms.dat
         roomList = housekeepingDAO.retrieveRoomsFromFile();
         if (roomList == null || roomList.isEmpty()) {
@@ -34,9 +52,23 @@ public class FrontDeskController {
             roomList = hk.getRoomList();
         }
 
-        initHardcodedData();
+        // Load reservations from binary file via DAO
+        reservationsMap = dao.retrieveReservationsFromFile();
+
+        // Populate default demo data if map is empty
+        if (reservationsMap == null || reservationsMap.isEmpty()) {
+            initHardcodedData();
+        }
     }
 
+    /**
+     * Populates the HashMap collection with hard-coded demo data.
+     *
+     * Per assignment specification: "You may populate the collection objects
+     * by reading from a file or using a method which adds hard-coded entity values."
+     * This method fulfils that requirement by pre-loading realistic sample
+     * reservations so all features (search, reports, CRUD) can be demonstrated.
+     */
     private void initHardcodedData() {
         Room r101 = findRoomById("R101");
         Room r102 = findRoomById("R102");
@@ -72,6 +104,9 @@ public class FrontDeskController {
         reservationsMap.put(res2.getConfirmationNumber(), res2);
         reservationsMap.put(res3.getConfirmationNumber(), res3);
         reservationsMap.put(res4.getConfirmationNumber(), res4);
+
+        // Persist initial data to file via DAO
+        dao.saveReservationsToFile(reservationsMap);
     }
 
     // =========================================================================
@@ -166,21 +201,6 @@ public class FrontDeskController {
 
     /**
      * Feature 3: Room Availability Query.
-     * Filters the room array for available rooms of the requested type.
-     */
-    private Room findRoomById(String roomId) {
-        if (roomId == null) return null;
-        for (int i = 1; i <= roomList.getNumberOfEntries(); i++) {
-            Room r = roomList.getEntry(i);
-            if (r.getRoomId().equalsIgnoreCase(roomId)) {
-                return r;
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Feature 3: Room Availability Query.
      * Displays the synchronized room status table across all 3 system modules.
      */
     private void checkRoomAvailability() {
@@ -265,6 +285,7 @@ public class FrontDeskController {
 
         // INSERT into HashMap — key = confirmation number
         reservationsMap.put(confNum, newRes);
+        dao.saveReservationsToFile(reservationsMap);
 
         ui.displayMessage("Check-In successful!\nConfirmation Number: " + confNum +
                           "\nGuest: " + name + " | Room: " + roomId);
@@ -330,6 +351,7 @@ public class FrontDeskController {
             default:
                 MessageUI.displayInvalidChoiceMessage();
         }
+        dao.saveReservationsToFile(reservationsMap);
         ui.pressEnterToContinue();
     }
 
@@ -385,6 +407,7 @@ public class FrontDeskController {
 
         // REMOVE from active HashMap
         reservationsMap.remove(confNum);
+        dao.saveReservationsToFile(reservationsMap);
 
         ui.displayMessage("Check-out successful for " + res.getGuest().getName() +
                 ".\nRoom " + (room != null ? room.getRoomId() : "N/A") + " status updated to 'Dirty' (pending housekeeping).\nPayment collected: RM" +
@@ -434,11 +457,10 @@ public class FrontDeskController {
                     r.getRoom().getRoomId(),
                     r.getCheckInDate(),
                     r.getTotalAmount());
-            switch (r.getRoom().getRoomType().toLowerCase()) {
-                case "standard": standard++; break;
-                case "deluxe":   deluxe++;   break;
-                case "suite":    suite++;    break;
-            }
+            String type = r.getRoom().getRoomType().toLowerCase();
+            if (type.contains("standard")) standard++;
+            else if (type.contains("executive") || type.contains("deluxe")) deluxe++;
+            else if (type.contains("presidential") || type.contains("suite")) suite++;
         }
         ui.displayFooter();
 
@@ -454,15 +476,15 @@ public class FrontDeskController {
         }
 
         System.out.println("\n  OCCUPANCY SUMMARY BY ROOM TIER:");
-        System.out.printf("  %-12s : %d / %d occupied (%.0f%%)%n",
+        System.out.printf("  %-18s : %d / %d occupied (%.0f%%)%n",
                 "Standard", standard, totalStd, totalStd > 0 ? standard * 100.0 / totalStd : 0);
-        System.out.printf("  %-12s : %d / %d occupied (%.0f%%)%n",
-                "Deluxe/Executive", deluxe, totalDlx, totalDlx > 0 ? deluxe * 100.0 / totalDlx : 0);
-        System.out.printf("  %-12s : %d / %d occupied (%.0f%%)%n",
+        System.out.printf("  %-18s : %d / %d occupied (%.0f%%)%n",
+                "Executive/Deluxe", deluxe, totalDlx, totalDlx > 0 ? deluxe * 100.0 / totalDlx : 0);
+        System.out.printf("  %-18s : %d / %d occupied (%.0f%%)%n",
                 "Presidential/Suite", suite, totalSte, totalSte > 0 ? suite * 100.0 / totalSte : 0);
 
         int totalOccupied = standard + deluxe + suite;
-        System.out.printf("  %-12s : %d / %d (%.0f%%)%n",
+        System.out.printf("  %-18s : %d / %d (%.0f%%)%n",
                 "Overall", totalOccupied, totalRoomsCount,
                 totalRoomsCount > 0 ? totalOccupied * 100.0 / totalRoomsCount : 0);
 
@@ -539,6 +561,17 @@ public class FrontDeskController {
     // =========================================================================
     // HELPER / UTILITY METHODS
     // =========================================================================
+
+    private Room findRoomById(String roomId) {
+        if (roomId == null) return null;
+        for (int i = 1; i <= roomList.getNumberOfEntries(); i++) {
+            Room r = roomList.getEntry(i);
+            if (r.getRoomId().equalsIgnoreCase(roomId)) {
+                return r;
+            }
+        }
+        return null;
+    }
 
     private Reservation[] trimArray(Reservation[] arr, int size) {
         Reservation[] trimmed = new Reservation[size];
