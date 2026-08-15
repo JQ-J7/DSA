@@ -746,8 +746,10 @@ public class FrontDeskControl {
             Room matchingRoom = findRoomById(room.getRoomId());
             if (matchingRoom != null) {
                 matchingRoom.setCurrentStatus("Dirty");
+                matchingRoom.setAssignedStaffId("UNASSIGNED");
             } else {
                 room.setCurrentStatus("Dirty");
+                room.setAssignedStaffId("UNASSIGNED");
             }
             housekeepingDAO.saveRoomsToFile(roomList);
         }
