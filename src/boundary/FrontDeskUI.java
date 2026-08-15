@@ -256,21 +256,23 @@ public class FrontDeskUI {
 
     public String inputRoomType() {
         while (true) {
-            System.out.println("\nSelect Room Type:");
-            System.out.println(" [1] Standard Room");
-            System.out.println(" [2] Deluxe Room");
-            System.out.println(" [3] Suite Room");
-            System.out.println(" [0] Cancel");
-            System.out.print("Select Choice [1-3] or [0] to Cancel: ");
+            System.out.println("\nSelect Room Availability Filter:");
+            System.out.println("  [1] Standard Room (RM 200.00 / night)");
+            System.out.println("  [2] Deluxe Room   (RM 350.00 / night)");
+            System.out.println("  [3] Suite Room    (RM 600.00 / night)");
+            System.out.println("  [4] All Room Types (Full Resort Inventory)");
+            System.out.println("  [0] Cancel");
+            System.out.print("Select Choice [0-4]: ");
             if (!scanner.hasNextLine()) return "";
             String choice = scanner.nextLine().trim();
             switch (choice) {
                 case "1": return "Standard Room";
                 case "2": return "Deluxe Room";
                 case "3": return "Suite Room";
+                case "4": return "ALL";
                 case "0": return "";
                 default:
-                    System.out.println("\n  [!] Invalid choice! Please enter 1, 2, 3, or 0 to cancel.");
+                    System.out.println("\n  [!] Invalid choice! Please enter 0, 1, 2, 3, or 4.");
             }
         }
     }
