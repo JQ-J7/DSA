@@ -288,18 +288,36 @@ public class WalkInBookingControl {
             nextBooking.setAssignedRoom(matchedRoom);
             nextBooking.setStatus("ALLOCATED");
 
+            // Register active stay into Front-Desk Non-Linear ADT Map (reservations.dat)
+            dao.FrontDeskDAO frontDeskDAO = new dao.FrontDeskDAO();
+            adt.MapInterface<String, entity.Reservation> resMap = frontDeskDAO.retrieveReservationsFromFile();
+            if (resMap == null) {
+                resMap = new adt.HashMap<>();
+            }
+            String confNum = String.format("2026%04d", (allBookings.getNumberOfEntries() * 19 + 1000) % 9000 + 1000);
+            java.time.LocalDate inDate = java.time.LocalDate.now();
+            java.time.LocalDate outDate = inDate.plusDays(nextBooking.getNumberOfNights());
+            entity.Reservation newRes = new entity.Reservation(confNum, nextBooking.getGuest(), matchedRoom,
+                    inDate.toString(), outDate.toString(), nextBooking.getEstimatedRatePerNight(), "Checked-In");
+            resMap.put(confNum, newRes);
+            frontDeskDAO.saveReservationsToFile(resMap);
+
             // Persist changes
             bookingDAO.saveBookingsToFile(allBookings);
             housekeepingDAO.saveRoomsToFile(roomList);
 
             ui.displayMessage(String.format(
-                    "ROOM ALLOCATION SUCCESSFUL!\n" +
-                            "Guest      : %s\n" +
-                            "Booking ID : %s\n" +
-                            "Room Assigned: %s (%s, Floor %d)\n" +
-                            "Remaining Queue Size: %d",
+                    "ROOM ALLOCATION & REGISTRATION SUCCESSFUL!\n" +
+                    "  Guest Name          : %s\n" +
+                    "  Booking ID          : %s\n" +
+                    "  Confirmation Number : %s\n" +
+                    "  Room Assigned       : %s (%s, Floor %d)\n" +
+                    "  Stay Duration       : %d night(s)\n" +
+                    "  Remaining in Queue  : %d",
                     nextBooking.getGuest().getName(), nextBooking.getBookingId(),
+                    confNum,
                     matchedRoom.getRoomId(), matchedRoom.getRoomType(), matchedRoom.getFloorNumber(),
+                    nextBooking.getNumberOfNights(),
                     waitingQueue.size()));
         } else {
             ui.displayMessage("Allocation cancelled. Guest remains in queue.");

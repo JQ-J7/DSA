@@ -25,24 +25,23 @@ public class FrontDeskUI {
         System.out.println("          TARUMT RESORTS - FRONT-DESK SERVICE & GUEST INQUIRIES");
         System.out.println("==========================================================================");
         System.out.println(" --- [ INQUIRY & SEARCH SERVICES ] ---");
-        System.out.println(" [1] Guest Lookup by Confirmation Number (8-digit)");
+        System.out.println(" [1] Guest Identification & Stay Lookup (8-digit Confirmation Number)");
         System.out.println(" [2] Search Guest by Name / IC Number");
         System.out.println(" [3] Check Room Availability by Type");
-        System.out.println(" [4] Billing & Folio Inquiry");
+        System.out.println(" [4] Billing & Detailed Folio Inquiry");
         System.out.println();
         System.out.println(" --- [ FRONT-DESK RECORD MANAGEMENT ] ---");
-        System.out.println(" [5] Check-In New Guest (Add Reservation)");
-        System.out.println(" [6] Update Guest Charges / Extend Stay");
-        System.out.println(" [7] Check-Out Guest (Remove & Archive)");
+        System.out.println(" [5] Update Guest Charges / Extend Stay");
+        System.out.println(" [6] Check-Out Guest (Process Payment & Release Room)");
         System.out.println();
         System.out.println(" --- [ MANAGEMENT REPORTS ] ---");
-        System.out.println(" [8] Report 1: Daily Occupancy & Room Tier Summary");
-        System.out.println(" [9] Report 2: Pending Settlement & High-Value Guest Analysis");
+        System.out.println(" [7] Report 1: Daily Occupancy & Room Tier Summary");
+        System.out.println(" [8] Report 2: Pending Settlement & High-Value Guest Analysis");
         System.out.println();
         System.out.println(" --- [ NAVIGATION ] ---");
         System.out.println(" [0] Back to Main System Menu");
         System.out.println("==========================================================================");
-        System.out.print("Select Option [0-9]: ");
+        System.out.print("Select Option [0-8]: ");
 
         if (!scanner.hasNextLine()) return 0;
         try {

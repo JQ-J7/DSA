@@ -14,6 +14,7 @@ import java.io.*;
 public class FrontDeskDAO {
 
     private String fileName = "reservations.dat";
+    private String historyFileName = "checkout_history.dat";
 
     public void saveReservationsToFile(MapInterface<String, Reservation> reservationMap) {
         File file = new File(fileName);
@@ -41,5 +42,33 @@ public class FrontDeskDAO {
             System.out.println("Cannot read reservations from file.");
         }
         return reservationMap;
+    }
+
+    public void saveHistoryToFile(adt.ListInterface<Reservation> historyList) {
+        File file = new File(historyFileName);
+        try (ObjectOutputStream ooStream = new ObjectOutputStream(new FileOutputStream(file))) {
+            ooStream.writeObject(historyList);
+        } catch (FileNotFoundException ex) {
+            System.out.println("Check-out history data file not found.");
+        } catch (IOException ex) {
+            System.out.println("Cannot save check-out history to file: " + ex.getMessage());
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public adt.ListInterface<Reservation> retrieveHistoryFromFile() {
+        File file = new File(historyFileName);
+        adt.ListInterface<Reservation> historyList = new adt.ArrayList<>();
+        if (!file.exists()) {
+            return historyList;
+        }
+        try (ObjectInputStream oiStream = new ObjectInputStream(new FileInputStream(file))) {
+            historyList = (adt.ArrayList<Reservation>) (oiStream.readObject());
+        } catch (FileNotFoundException ex) {
+            System.out.println("No check-out history data file found.");
+        } catch (IOException | ClassNotFoundException ex) {
+            System.out.println("Cannot read check-out history from file.");
+        }
+        return historyList;
     }
 }

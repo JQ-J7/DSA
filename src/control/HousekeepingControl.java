@@ -372,6 +372,12 @@ public class HousekeepingControl {
     }
 
     public void runHousekeepingSystem() {
+        // Reload latest room data from shared rooms.dat each time subsystem is entered
+        ListInterface<Room> latestRooms = dao.retrieveRoomsFromFile();
+        if (latestRooms != null && !latestRooms.isEmpty()) {
+            roomList = latestRooms;
+        }
+
         int choice;
         do {
             choice = ui.getMenuChoice();

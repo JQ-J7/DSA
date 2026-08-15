@@ -85,6 +85,27 @@ public class Reservation implements Serializable, Comparable<Reservation> {
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
 
+    /** Returns a concise guest identification and room stay summary for Option [1]. */
+    public String toStayInfoString() {
+        return String.format(
+            "  Confirmation Number : %s\n" +
+            "  Guest Name          : %s\n" +
+            "  IC Number           : %s\n" +
+            "  Contact Number      : %s\n" +
+            "  Room Assigned       : %s (%s, Floor %d)\n" +
+            "  Check-In Date       : %s\n" +
+            "  Check-Out Date      : %s\n" +
+            "  Stay Duration       : %d night(s)\n" +
+            "  Reservation Status  : %s",
+            confirmationNumber,
+            guest.getName(), guest.getIcNumber(), guest.getContactNumber(),
+            room.getRoomId(), room.getRoomType(), room.getFloorNumber(),
+            checkInDate, checkOutDate,
+            getNumberOfNights(),
+            status
+        );
+    }
+
     /** Returns a detailed folio-style summary for billing inquiries. */
     public String toFolioString() {
         long nights = getNumberOfNights();
