@@ -3,7 +3,8 @@ package entity;
 import java.io.Serializable;
 
 /**
- * Entity class representing an individual status change record or rollback event.
+ * Entity class representing an individual status change record or rollback
+ * event.
  * 
  * @author Tan Jun Qi
  */
@@ -17,7 +18,8 @@ public class TaskStatusHistory implements Serializable {
     private String changeReason;
     private boolean isRollback;
 
-    public TaskStatusHistory(String logId, String previousStatus, String newStatus, String updatedBy, String timestamp, String changeReason, boolean isRollback) {
+    public TaskStatusHistory(String logId, String previousStatus, String newStatus, String updatedBy, String timestamp,
+            String changeReason, boolean isRollback) {
         this.logId = logId;
         this.previousStatus = previousStatus;
         this.newStatus = newStatus;
