@@ -458,7 +458,7 @@ public class FrontDeskControl {
             if (query.isEmpty() || "0".equals(query)) { ui.displayMessage("Operation cancelled."); return null; }
 
             Object[] allRes = reservationsMap.values();
-            java.util.ArrayList<Reservation> matches = new java.util.ArrayList<>();
+            adt.ListInterface<Reservation> matches = new adt.ArrayList<>();
             for (Object obj : allRes) {
                 Reservation r = (Reservation) obj;
                 if (onlyCheckedIn && !"Checked-In".equalsIgnoreCase(r.getStatus())) continue;
@@ -474,26 +474,26 @@ public class FrontDeskControl {
                 return null;
             }
 
-            if (matches.size() == 1) {
-                return matches.get(0);
+            if (matches.getNumberOfEntries() == 1) {
+                return matches.getEntry(1);
             } else {
                 System.out.println("\nMultiple matching guests found:");
                 System.out.printf("  %-4s | %-10s | %-20s | %-14s | %-6s%n",
                         "No.", "Conf. No.", "Guest Name", "IC Number", "Room");
                 System.out.println("  ----------------------------------------------------------");
-                for (int i = 0; i < matches.size(); i++) {
-                    Reservation r = matches.get(i);
+                for (int i = 1; i <= matches.getNumberOfEntries(); i++) {
+                    Reservation r = matches.getEntry(i);
                     System.out.printf("  %-4d | %-10s | %-20s | %-14s | %-6s%n",
-                            i + 1, r.getConfirmationNumber(),
+                            i, r.getConfirmationNumber(),
                             r.getGuest().getName(), r.getGuest().getIcNumber(),
                             r.getRoom().getRoomId());
                 }
-                int pick = ui.inputInt("Select guest number [1-" + matches.size() + "] or 0 to cancel: ");
-                if (pick < 1 || pick > matches.size()) {
+                int pick = ui.inputInt("Select guest number [1-" + matches.getNumberOfEntries() + "] or 0 to cancel: ");
+                if (pick < 1 || pick > matches.getNumberOfEntries()) {
                     ui.displayMessage("Operation cancelled.");
                     return null;
                 }
-                return matches.get(pick - 1);
+                return matches.getEntry(pick);
             }
         } else {
             ui.displayMessage("Operation cancelled.");
@@ -751,7 +751,7 @@ public class FrontDeskControl {
         }
 
         // Gather all active records and archived history
-        java.util.ArrayList<Reservation> allList = new java.util.ArrayList<>();
+        adt.ListInterface<Reservation> allList = new adt.ArrayList<>();
         for (Object obj : reservationsMap.values()) {
             if (obj != null) allList.add((Reservation) obj);
         }
@@ -760,13 +760,14 @@ public class FrontDeskControl {
             if (r != null) allList.add(r);
         }
 
-        java.util.ArrayList<Reservation> filteredList = new java.util.ArrayList<>();
+        adt.ListInterface<Reservation> filteredList = new adt.ArrayList<>();
         String filterDescription = "All Active & Outstanding Accounts";
 
         if (filterChoice == 1) {
             // Default: All unpaid / active
             filterDescription = "All Outstanding Accounts";
-            for (Reservation r : allList) {
+            for (int i = 1; i <= allList.getNumberOfEntries(); i++) {
+                Reservation r = allList.getEntry(i);
                 if (!r.isPaid()) {
                     filteredList.add(r);
                 }
@@ -784,7 +785,8 @@ public class FrontDeskControl {
             java.time.LocalDate end   = java.time.LocalDate.parse(endDate);
             filterDescription = "Check-In Date Range (" + startDate + " to " + endDate + ")";
 
-            for (Reservation r : allList) {
+            for (int i = 1; i <= allList.getNumberOfEntries(); i++) {
+                Reservation r = allList.getEntry(i);
                 try {
                     java.time.LocalDate inDate = java.time.LocalDate.parse(r.getCheckInDate());
                     if (!inDate.isBefore(start) && !inDate.isAfter(end)) {
@@ -808,7 +810,8 @@ public class FrontDeskControl {
             else if (stChoice == 3) { targetStatus = "Checked-Out"; filterDescription = "Status: Checked-Out"; }
             else { filterDescription = "All Reservation Statuses"; }
 
-            for (Reservation r : allList) {
+            for (int i = 1; i <= allList.getNumberOfEntries(); i++) {
+                Reservation r = allList.getEntry(i);
                 if (targetStatus == null || targetStatus.equalsIgnoreCase(r.getStatus())) {
                     filteredList.add(r);
                 }
@@ -820,7 +823,8 @@ public class FrontDeskControl {
             if (minThreshold <= 0) minThreshold = 1000.00;
             filterDescription = "High-Value Accounts (Total >= RM " + String.format("%.2f", minThreshold) + ")";
 
-            for (Reservation r : allList) {
+            for (int i = 1; i <= allList.getNumberOfEntries(); i++) {
+                Reservation r = allList.getEntry(i);
                 if (r.getTotalAmount() >= minThreshold) {
                     filteredList.add(r);
                 }
@@ -834,7 +838,10 @@ public class FrontDeskControl {
         }
 
         // Convert to array and sort by Total Amount descending using QuickSort
-        Reservation[] results = filteredList.toArray(new Reservation[0]);
+        Reservation[] results = new Reservation[filteredList.getNumberOfEntries()];
+        for (int i = 1; i <= filteredList.getNumberOfEntries(); i++) {
+            results[i - 1] = filteredList.getEntry(i);
+        }
         quickSortByAmountDesc(results, 0, results.length - 1);
 
         System.out.println("\n  Filter Applied: " + filterDescription);
