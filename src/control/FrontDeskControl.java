@@ -1,0 +1,983 @@
+package control;
+
+import adt.ArrayList;
+import adt.HashMap;
+import adt.ListInterface;
+import adt.MapInterface;
+import boundary.FrontDeskUI;
+import boundary.HousekeepingUI;
+import dao.FrontDeskDAO;
+import dao.HousekeepingDAO;
+import dao.WalkInBookingDAO;
+import entity.Guest;
+import entity.Reservation;
+import entity.Room;
+import entity.WalkInBooking;
+import utility.MessageUI;
+
+/**
+ * Control Class for the Front-Desk Service subsystem.
+ * Implements full CRUD on a custom HashMap (Non-Linear ADT) keyed by
+ * 8-digit confirmation number, plus searching and management reports.
+ *
+ * ECB Pattern: This class serves as the Control layer.
+ *
+ * @author Mun Jun How
+ */
+public class FrontDeskControl {
+
+    // -------------------------------------------------------------------------
+    // Non-Linear ADT: Custom HashMap<String, Reservation>
+    // Key   = 8-digit Confirmation Number (for O(1) lookup)
+    // Value = Reservation object
+    // -------------------------------------------------------------------------
+    private MapInterface<String, Reservation> reservationsMap = new HashMap<>();
+    private ListInterface<Room> roomList = new ArrayList<>();
+
+    private FrontDeskDAO dao = new FrontDeskDAO();
+    private HousekeepingDAO housekeepingDAO = new HousekeepingDAO();
+    private WalkInBookingDAO walkInBookingDAO = new WalkInBookingDAO();
+    private FrontDeskUI ui = new FrontDeskUI();
+    private int nextConfirmationSuffix = 5; // Used to generate unique 8-digit IDs
+
+    // =========================================================================
+    // CONSTRUCTOR & DATA INITIALISATION
+    // =========================================================================
+
+    public FrontDeskControl() {
+        ui = new FrontDeskUI();
+        nextConfirmationSuffix = 5;
+
+        // Synchronize with shared rooms.dat
+        roomList = housekeepingDAO.retrieveRoomsFromFile();
+        if (roomList == null || roomList.isEmpty()) {
+            addDefaultDemoRooms();
+        } else {
+            addDefaultDemoRooms();
+        }
+
+        // Load reservations from binary file via DAO
+        reservationsMap = dao.retrieveReservationsFromFile();
+
+        // Populate default demo data if map is empty
+        if (reservationsMap == null || reservationsMap.isEmpty()) {
+            initHardcodedData();
+        }
+    }
+
+    /**
+     * Adds and synchronizes the constant 15 hotel rooms (Floor 1-3)
+     * matching the Housekeeping and Walk-In subsystem standards.
+     */
+    private void addDefaultDemoRooms() {
+        Room[] constantRooms = new Room[] {
+            // Floor 1: 1 Suite Room, 2 Deluxe Rooms, 2 Standard Rooms
+            new Room("R101", "Suite Room", 1, "Dirty", "ST101"),
+            new Room("R102", "Deluxe Room", 1, "Cleaning In Progress", "ST102"),
+            new Room("R103", "Deluxe Room", 1, "Inspected", "ST103"),
+            new Room("R104", "Standard Room", 1, "Ready for Check-In", "ST104"),
+            new Room("R105", "Standard Room", 1, "Ready for Check-In", "ST105"),
+
+            // Floor 2: 1 Suite Room, 2 Deluxe Rooms, 2 Standard Rooms
+            new Room("R201", "Suite Room", 2, "Dirty", "ST201"),
+            new Room("R202", "Deluxe Room", 2, "Cleaning In Progress", "ST202"),
+            new Room("R203", "Deluxe Room", 2, "Inspected", "ST203"),
+            new Room("R204", "Standard Room", 2, "Ready for Check-In", "ST204"),
+            new Room("R205", "Standard Room", 2, "Ready for Check-In", "ST205"),
+
+            // Floor 3: 1 Suite Room, 2 Deluxe Rooms, 2 Standard Rooms
+            new Room("R301", "Suite Room", 3, "Dirty", "ST301"),
+            new Room("R302", "Deluxe Room", 3, "Cleaning In Progress", "ST302"),
+            new Room("R303", "Deluxe Room", 3, "Inspected", "ST303"),
+            new Room("R304", "Standard Room", 3, "Ready for Check-In", "ST304"),
+            new Room("R305", "Standard Room", 3, "Ready for Check-In", "ST305")
+        };
+        for (Room r : constantRooms) {
+            Room existing = findRoomById(r.getRoomId());
+            if (existing == null) {
+                roomList.add(r);
+            } else {
+                existing.setRoomType(r.getRoomType());
+                existing.setFloorNumber(r.getFloorNumber());
+            }
+        }
+        housekeepingDAO.saveRoomsToFile(roomList);
+    }
+
+    /**
+     * Populates the HashMap collection with hard-coded demo data.
+     *
+     * Per assignment specification: "You may populate the collection objects
+     * by reading from a file or using a method which adds hard-coded entity values."
+     * This method fulfils that requirement by pre-loading realistic sample
+     * reservations so all features (search, reports, CRUD) can be demonstrated.
+     */
+    private void initHardcodedData() {
+        Room r101 = findRoomById("R101");
+        Room r201 = findRoomById("R201");
+        Room r301 = findRoomById("R301");
+        Room r104 = findRoomById("R104");
+
+        if (r101 == null) r101 = new Room("R101", "Suite Room", 1, "Occupied", "ST101");
+        if (r201 == null) r201 = new Room("R201", "Suite Room", 2, "Occupied", "ST201");
+        if (r301 == null) r301 = new Room("R301", "Suite Room", 3, "Occupied", "ST301");
+        if (r104 == null) r104 = new Room("R104", "Standard Room", 1, "Ready for Check-In", "ST104");
+
+        // --- Guest Entity Objects ---
+        Guest g1 = new Guest("990101-14-5566", "Ali Bin Abu",    "012-3456789");
+        Guest g2 = new Guest("881212-10-1234", "Chong Wei",      "016-9876543");
+        Guest g3 = new Guest("010203-01-9988", "Siti Nurhaliza", "019-1112222");
+        Guest g4 = new Guest("750505-08-4433", "John Doe",       "011-5556666");
+
+        // --- Reservation Entities: put into HashMap with 8-digit confirmation number as key ---
+        Reservation res1 = new Reservation("12345678", g1, r101, "2026-08-01", "2026-08-05", 600.00, "Checked-In");
+        res1.addIncidentalCharge(85.00);
+
+        Reservation res2 = new Reservation("87654321", g2, r201, "2026-08-10", "2026-08-12", 600.00, "Confirmed");
+
+        Reservation res3 = new Reservation("11223344", g3, r301, "2026-08-02", "2026-08-07", 600.00, "Checked-In");
+        res3.addIncidentalCharge(650.00);
+
+        Reservation res4 = new Reservation("99887766", g4, r104, "2026-08-15", "2026-08-20", 200.00, "Confirmed");
+        res4.addIncidentalCharge(900.00);
+
+        reservationsMap.put(res1.getConfirmationNumber(), res1);
+        reservationsMap.put(res2.getConfirmationNumber(), res2);
+        reservationsMap.put(res3.getConfirmationNumber(), res3);
+        reservationsMap.put(res4.getConfirmationNumber(), res4);
+
+        // Persist initial data to file via DAO
+        dao.saveReservationsToFile(reservationsMap);
+    }
+
+    // =========================================================================
+    // MAIN RUN LOOP
+    // =========================================================================
+
+    public void run() {
+        runFrontDeskSystem();
+    }
+
+    public void runFrontDeskSystem() {
+        // Reload latest room data from shared rooms.dat each time subsystem is entered
+        // so changes made by Housekeeping or Walk-In are reflected
+        ListInterface<Room> latestRooms = housekeepingDAO.retrieveRoomsFromFile();
+        if (latestRooms != null && !latestRooms.isEmpty()) {
+            roomList = latestRooms;
+        }
+        int choice;
+        do {
+            choice = ui.getMenuChoice();
+            switch (choice) {
+                // --- Inquiry & Search Services ---
+                case 1: guestLookupByConfirmation(); break;
+                case 2: searchGuestByNameOrIC();     break;
+                case 3: checkRoomAvailability();     break;
+                case 4: billingFolioInquiry();       break;
+                // --- Record Management (CRUD) ---
+                case 5: checkInNewGuest();           break;
+                case 6: updateGuestCharges();        break;
+                case 7: checkOutGuest();             break;
+                // --- Reports ---
+                case 8: reportDailyOccupancy();              break;
+                case 9: reportPendingSettlementHighValue();  break;
+                case 0: MessageUI.displayExitMessage();      break;
+                default: MessageUI.displayInvalidChoiceMessage();
+            }
+        } while (choice != 0);
+    }
+
+    // =========================================================================
+    // SECTION 1: INQUIRY & SEARCH SERVICES
+    // =========================================================================
+
+    /**
+     * Feature 1: O(1) lookup using the HashMap.get(key) on the 8-digit
+     * confirmation number — the core Non-Linear ADT showcase.
+     */
+    private void guestLookupByConfirmation() {
+        ui.displayHeader("GUEST IDENTIFICATION & LOOKUP");
+        String confNum = ui.inputConfirmationNumber();
+        if (confNum.isEmpty()) { ui.displayMessage("Operation cancelled."); return; }
+
+        // Validate: must be 8 digits
+        if (!confNum.matches("\\d{8}")) {
+            ui.displayMessage("Invalid format. Confirmation number must be exactly 8 digits.");
+            ui.pressEnterToContinue();
+            return;
+        }
+
+        // O(1) HashMap lookup
+        Reservation res = reservationsMap.get(confNum);
+
+        if (res != null) {
+            ui.displayReservationDetails(res.toFolioString());
+        } else {
+            ui.displayMessage("No reservation found for confirmation number: " + confNum);
+        }
+        ui.pressEnterToContinue();
+    }
+
+    /**
+     * Feature 2: Guest search by Name or IC number.
+     * Demonstrates Linear Search through HashMap values — used as the PRIMARY
+     * RECOVERY TOOL when the 8-digit confirmation number is forgotten.
+     */
+    private void searchGuestByNameOrIC() {
+        ui.displayHeader("SEARCH GUEST BY NAME / IC NUMBER (RECOVERY TOOL)");
+        String query = ui.inputGuestSearchQuery();
+        if (query.isEmpty()) { ui.displayMessage("Search query cannot be empty."); return; }
+
+        ui.displayHeader("SEARCH RESULTS FOR: \"" + query + "\"");
+        boolean found = false;
+        Object[] allRes = reservationsMap.values();
+
+        // Linear Search through all values in the HashMap
+        for (Object obj : allRes) {
+            Reservation r = (Reservation) obj;
+            if (r.getGuest().getName().toLowerCase().contains(query.toLowerCase()) ||
+                r.getGuest().getIcNumber().contains(query)) {
+                
+                System.out.println("--------------------------------------------------------------------------");
+                System.out.println("Guest Found         : " + r.getGuest().getName());
+                System.out.println("IC Number           : " + r.getGuest().getIcNumber());
+                System.out.println("Contact Number      : " + r.getGuest().getContactNumber());
+                System.out.println("Room                : " + r.getRoom().getRoomId() + " (" + r.getRoom().getRoomType() + ", Floor " + r.getRoom().getFloorNumber() + ")");
+                System.out.println("Confirmation Number : " + r.getConfirmationNumber() + " -> (You now copy this number to use in other menu options)");
+                System.out.println("Reservation Status  : " + r.getStatus());
+                System.out.println("Stay Period         : " + r.getCheckInDate() + " to " + r.getCheckOutDate() + " (" + r.getNumberOfNights() + " night(s))");
+                System.out.println("Room Rate           : RM " + String.format("%.2f", r.getRoomRate()) + " / night");
+                System.out.println("Incidentals Added   : RM " + String.format("%.2f", r.getIncidentalCharges()));
+                System.out.println("Total Folio Amount  : RM " + String.format("%.2f", r.getTotalAmount()) + " (Status: " + (r.isPaid() ? "PAID" : "OUTSTANDING") + ")");
+                System.out.println("--------------------------------------------------------------------------");
+                found = true;
+            }
+        }
+
+        if (!found) {
+            ui.displayMessage("No active reservations matching \"" + query + "\" were found in Front-Desk.\n" +
+                "Tip: If the guest has not checked in yet, check the Walk-In System.");
+        }
+        ui.pressEnterToContinue();
+    }
+
+    /**
+     * Feature 3: Room Availability Query.
+     * Filters the shared 15 hotel rooms for available rooms of the requested type.
+     */
+    private void checkRoomAvailability() {
+        ui.displayHeader("ROOM AVAILABILITY QUERY");
+        String type = ui.inputRoomType();
+        if (type.isEmpty()) {
+            ui.displayMessage("Operation cancelled.");
+            return;
+        }
+
+        System.out.println();
+        System.out.printf("%-8s | %-16s | %-6s | %-22s%n",
+                "Room ID", "Room Type", "Floor", "Status");
+        ui.displayFooter();
+
+        int availableCount = 0;
+        for (int i = 1; i <= roomList.getNumberOfEntries(); i++) {
+            Room r = roomList.getEntry(i);
+            if (r.getRoomType().equalsIgnoreCase(type) || 
+                r.getRoomType().toLowerCase().contains(type.toLowerCase())) {
+                System.out.printf("%-8s | %-16s | %-6d | %-22s%n",
+                        r.getRoomId(), r.getRoomType(), r.getFloorNumber(), r.getCurrentStatus());
+                if (r.getCurrentStatus().equalsIgnoreCase("Ready for Check-In")) {
+                    availableCount++;
+                }
+            }
+        }
+        ui.displayFooter();
+        ui.displayMessage(availableCount + " room(s) of type [" + type + "] are available for Check-In.");
+        ui.pressEnterToContinue();
+    }
+
+    /**
+     * Feature 4: Billing & Folio Inquiry.
+     * Retrieves full folio with room rate, incidentals, total, and payment status.
+     * Supports lookup by Confirmation Number, Guest Name, or IC Number.
+     */
+    private void billingFolioInquiry() {
+        ui.displayHeader("BILLING & FOLIO INQUIRY");
+        Reservation res = findReservationPrompt("BILLING & FOLIO INQUIRY", false);
+        if (res == null) {
+            return;
+        }
+
+        ui.displayReservationDetails(res.toFolioString());
+        ui.pressEnterToContinue();
+    }
+
+    /**
+     * Helper method to find a reservation by Confirmation Number, Guest Name, or IC Number.
+     * Used across Billing Inquiry, Update Charges, and Check-Out.
+     */
+    private Reservation findReservationPrompt(String actionTitle, boolean onlyCheckedIn) {
+        System.out.println("Find Reservation By:");
+        System.out.println("  [1] Confirmation Number (8-digit)");
+        System.out.println("  [2] Guest Name");
+        System.out.println("  [3] IC Number");
+        System.out.println("  [0] Cancel");
+        int lookupChoice = ui.inputInt("Select [0-3]: ");
+
+        if (lookupChoice == 1) {
+            String confNum = ui.inputConfirmationNumber();
+            if (confNum.isEmpty()) { ui.displayMessage("Operation cancelled."); return null; }
+            Reservation res = reservationsMap.get(confNum);
+            if (res == null) {
+                ui.displayMessage("No reservation found for confirmation number: " + confNum +
+                        "\nTip: Use Option [2] to search by Guest Name or IC Number.");
+                ui.pressEnterToContinue();
+                return null;
+            }
+            if (onlyCheckedIn && !"Checked-In".equalsIgnoreCase(res.getStatus())) {
+                ui.displayMessage("Guest is not currently checked in. Status: " + res.getStatus());
+                ui.pressEnterToContinue();
+                return null;
+            }
+            return res;
+
+        } else if (lookupChoice == 2 || lookupChoice == 3) {
+            String label = (lookupChoice == 2) ? "Guest Name" : "IC Number";
+            String query = ui.inputText("Enter " + label + " to search (or [0] to cancel): ").trim();
+            if (query.isEmpty() || "0".equals(query)) { ui.displayMessage("Operation cancelled."); return null; }
+
+            Object[] allRes = reservationsMap.values();
+            java.util.ArrayList<Reservation> matches = new java.util.ArrayList<>();
+            for (Object obj : allRes) {
+                Reservation r = (Reservation) obj;
+                if (onlyCheckedIn && !"Checked-In".equalsIgnoreCase(r.getStatus())) continue;
+                if (lookupChoice == 2 && r.getGuest().getName().toLowerCase().contains(query.toLowerCase())) {
+                    matches.add(r);
+                } else if (lookupChoice == 3 && r.getGuest().getIcNumber().contains(query)) {
+                    matches.add(r);
+                }
+            }
+
+            if (matches.isEmpty()) {
+                ui.displayMessage("No " + (onlyCheckedIn ? "checked-in " : "") + "guest found matching \"" + query + "\".");
+                ui.pressEnterToContinue();
+                return null;
+            }
+
+            if (matches.size() == 1) {
+                return matches.get(0);
+            } else {
+                System.out.println("\nMultiple guests found:");
+                System.out.printf("%-4s | %-10s | %-20s | %-14s | %-6s%n",
+                        "No.", "Conf. No.", "Guest Name", "IC Number", "Room");
+                System.out.println("----------------------------------------------------------");
+                for (int i = 0; i < matches.size(); i++) {
+                    Reservation r = matches.get(i);
+                    System.out.printf("%-4d | %-10s | %-20s | %-14s | %-6s%n",
+                            i + 1, r.getConfirmationNumber(),
+                            r.getGuest().getName(), r.getGuest().getIcNumber(),
+                            r.getRoom().getRoomId());
+                }
+                int pick = ui.inputInt("Select guest number [1-" + matches.size() + "] or 0 to cancel: ");
+                if (pick < 1 || pick > matches.size()) {
+                    ui.displayMessage("Operation cancelled.");
+                    return null;
+                }
+                return matches.get(pick - 1);
+            }
+        } else {
+            ui.displayMessage("Operation cancelled.");
+            return null;
+        }
+    }
+
+    // =========================================================================
+    // SECTION 2: FRONT-DESK RECORD MANAGEMENT (CRUD)
+    // =========================================================================
+
+    /**
+     * Feature 5: Check-In New Guest — INSERT into HashMap.
+     * Demonstrates the put(key, value) operation on the custom Non-Linear ADT.
+     */
+    private void checkInNewGuest() {
+        ui.displayHeader("CHECK-IN NEW GUEST (Add Reservation to Map)");
+        System.out.println("  [Tip] Enter [0] at any prompt to cancel and return to the menu.\n");
+
+        // -----------------------------------------------------------------------
+        // Step 1: Look up Walk-In Booking (by ID, Name, or IC Number)
+        // Guest must have registered in the Walk-In system before Front-Desk check-in
+        // -----------------------------------------------------------------------
+        System.out.println("Find Walk-In Registration By:");
+        System.out.println("  [1] Walk-In Booking ID");
+        System.out.println("  [2] Guest Name");
+        System.out.println("  [3] IC Number");
+        System.out.println("  [0] Cancel");
+        int searchType = ui.inputInt("Select Search Option [0-3]: ");
+
+        ListInterface<WalkInBooking> allBookings = walkInBookingDAO.retrieveBookingsFromFile();
+        WalkInBooking foundBooking = null;
+
+        if (searchType == 1) {
+            String rawBookingId = ui.inputText("Enter Walk-In Booking ID or [0] to cancel: ");
+            if (rawBookingId.isEmpty() || "0".equals(rawBookingId)) {
+                ui.displayMessage("Check-In cancelled.");
+                return;
+            }
+            String bookingId = rawBookingId.toUpperCase().trim();
+            for (int i = 1; i <= allBookings.getNumberOfEntries(); i++) {
+                WalkInBooking b = allBookings.getEntry(i);
+                if (b.getBookingId().equalsIgnoreCase(bookingId)) {
+                    foundBooking = b;
+                    break;
+                }
+            }
+            if (foundBooking == null) {
+                ui.displayMessage("Booking ID '" + bookingId + "' not found in the Walk-In System.\n" +
+                    "  Please ask the guest to register first at the Walk-In counter.");
+                ui.pressEnterToContinue();
+                return;
+            }
+        } else if (searchType == 2 || searchType == 3) {
+            String label = (searchType == 2) ? "Guest Name" : "IC Number";
+            String query = ui.inputText("Enter " + label + " to search (or [0] to cancel): ").trim();
+            if (query.isEmpty() || "0".equals(query)) {
+                ui.displayMessage("Check-In cancelled.");
+                return;
+            }
+            java.util.ArrayList<WalkInBooking> matches = new java.util.ArrayList<>();
+            for (int i = 1; i <= allBookings.getNumberOfEntries(); i++) {
+                WalkInBooking b = allBookings.getEntry(i);
+                if (searchType == 2 && b.getGuest().getName().toLowerCase().contains(query.toLowerCase())) {
+                    matches.add(b);
+                } else if (searchType == 3 && b.getGuest().getIcNumber().contains(query)) {
+                    matches.add(b);
+                }
+            }
+            if (matches.isEmpty()) {
+                ui.displayMessage("No Walk-In registrations matching \"" + query + "\" were found.\n" +
+                    "  Please ask the guest to register first at the Walk-In counter.");
+                ui.pressEnterToContinue();
+                return;
+            }
+            if (matches.size() == 1) {
+                foundBooking = matches.get(0);
+            } else {
+                System.out.println("\nMultiple registrations found in Walk-In system:");
+                System.out.printf("%-4s | %-10s | %-20s | %-15s | %-14s | %-10s%n",
+                        "No.", "Booking ID", "Guest Name", "IC Number", "Room Type", "Status");
+                System.out.println("------------------------------------------------------------------------------------------");
+                for (int i = 0; i < matches.size(); i++) {
+                    WalkInBooking b = matches.get(i);
+                    System.out.printf("%-4d | %-10s | %-20s | %-15s | %-14s | %-10s%n",
+                            i + 1, b.getBookingId(),
+                            b.getGuest().getName(), b.getGuest().getIcNumber(),
+                            b.getRequestedRoomType(), b.getStatus());
+                }
+                int pick = ui.inputInt("Select booking number [1-" + matches.size() + "] or 0 to cancel: ");
+                if (pick < 1 || pick > matches.size()) {
+                    ui.displayMessage("Check-In cancelled.");
+                    return;
+                }
+                foundBooking = matches.get(pick - 1);
+            }
+        } else {
+            ui.displayMessage("Check-In cancelled.");
+            return;
+        }
+
+        // Only allow WAITING or ALLOCATED bookings (not CANCELLED or already CHECKED_IN)
+        String bStatus = foundBooking.getStatus();
+        if ("CANCELLED".equalsIgnoreCase(bStatus)) {
+            ui.displayMessage("Booking '" + foundBooking.getBookingId() + "' was CANCELLED and cannot be used for Check-In.");
+            ui.pressEnterToContinue();
+            return;
+        }
+        if ("CHECKED_IN".equalsIgnoreCase(bStatus)) {
+            ui.displayMessage("Booking '" + foundBooking.getBookingId() + "' has already been Checked-In.");
+            ui.pressEnterToContinue();
+            return;
+        }
+
+        // Show the booking details and auto-fill guest info
+        System.out.println("\n  --- WALK-IN REGISTRATION FOUND ---");
+        System.out.println(foundBooking.toDetailString());
+        System.out.println();
+
+        // Pre-fill guest info from the Walk-In booking
+        Guest bookedGuest = foundBooking.getGuest();
+        String ic      = bookedGuest.getIcNumber();
+        String name    = bookedGuest.getName();
+        String contact = bookedGuest.getContactNumber();
+        String requestedType = foundBooking.getRequestedRoomType();
+
+        System.out.println("  [Auto-filled from Walk-In booking]");
+        System.out.println("  IC Number   : " + ic);
+        System.out.println("  Guest Name  : " + name);
+        System.out.println("  Contact     : " + contact);
+        System.out.println("  Room Type   : " + requestedType + "\n");
+
+        // -----------------------------------------------------------------------
+        // Step 2: Show Room Table filtered by the requested room type, then loop
+        // until user selects a valid "Ready for Check-In" room (or cancels)
+        // -----------------------------------------------------------------------
+        ui.displayMessage("--- AVAILABLE ROOMS (Select from table below) ---");
+        HousekeepingUI.displayRoomTable(roomList);
+
+        // Loop: pick a room — must exist AND be "Ready for Check-In"
+        Room selectedRoom = ui.inputAndSelectRoom(roomList);
+        if (selectedRoom == null) {
+            ui.displayMessage("Check-In cancelled.");
+            return;
+        }
+
+        // Optional: warn if room type doesn't match requested type (exact match, case-insensitive)
+        if (!selectedRoom.getRoomType().equalsIgnoreCase(requestedType)) {
+            System.out.println("  [!] Note: Guest requested '" + requestedType +
+                    "' but you selected '" + selectedRoom.getRoomType() + "'.");
+            if (!ui.confirmAction("Assign " + selectedRoom.getRoomType() + " instead of requested " + requestedType + "?")) {
+                ui.displayMessage("Check-In cancelled. Please select a room matching the requested type.");
+                return;
+            }
+        }
+
+        // -----------------------------------------------------------------------
+        // Step 3: Dates — Check-Out is AUTO-CALCULATED from Walk-In booking nights
+        // -----------------------------------------------------------------------
+        String checkIn = ui.inputDate("Enter Check-In Date");
+        if (checkIn == null) { ui.displayMessage("Check-In cancelled."); return; }
+
+        // Auto-calculate check-out from number of nights in Walk-In booking
+        java.time.LocalDate inDate      = java.time.LocalDate.parse(checkIn);
+        int bookedNights                = foundBooking.getNumberOfNights();
+        java.time.LocalDate autoCheckOut = inDate.plusDays(bookedNights);
+        String checkOut                 = autoCheckOut.toString();
+
+        System.out.println("  [Auto-calculated] Check-Out Date: " + checkOut +
+                " (" + bookedNights + " night(s) from Walk-In booking)");
+
+        // Allow staff to override check-out date (early departure / correction)
+        if (ui.confirmAction("Use auto-calculated Check-Out date " + checkOut + "?")) {
+            // use auto-calculated date — do nothing
+        } else {
+            // Staff manually enters check-out date
+            while (true) {
+                String manual = ui.inputDate("Enter Manual Check-Out Date");
+                if (manual == null) { ui.displayMessage("Check-In cancelled."); return; }
+                java.time.LocalDate manualDate = java.time.LocalDate.parse(manual);
+                if (manualDate.isAfter(inDate)) {
+                    long nights = java.time.temporal.ChronoUnit.DAYS.between(inDate, manualDate);
+                    checkOut = manual;
+                    System.out.println("  [OK] Manual Check-Out accepted. Stay duration: " + nights + " night(s).");
+                    break;
+                } else if (manualDate.isEqual(inDate)) {
+                    System.out.println("  [!] Check-Out cannot be same day as Check-In. Minimum 1 night.");
+                } else {
+                    System.out.println("  [!] Check-Out (" + manual + ") must be AFTER Check-In (" + checkIn + ").");
+                }
+            }
+        }
+
+        double rate = foundBooking.getEstimatedRatePerNight();
+        long actualNights = java.time.temporal.ChronoUnit.DAYS.between(inDate, java.time.LocalDate.parse(checkOut));
+        System.out.println("  [Auto-filled] Room Rate: RM " + String.format("%.2f", rate) +
+                " / night  |  Estimated Total: RM " + String.format("%.2f", rate * actualNights));
+
+        // -----------------------------------------------------------------------
+        // Step 4: Generate confirmation number, create Reservation, persist
+        // -----------------------------------------------------------------------
+        String confNum = String.format("20260%03d", nextConfirmationSuffix++);
+
+        Reservation newRes = new Reservation(confNum, bookedGuest, selectedRoom,
+                                             checkIn, checkOut, rate, "Checked-In");
+
+        // Mark room as Occupied and persist across all 3 system modules
+        selectedRoom.setCurrentStatus("Occupied");
+        housekeepingDAO.saveRoomsToFile(roomList);
+
+        // INSERT into HashMap — key = confirmation number
+        reservationsMap.put(confNum, newRes);
+        dao.saveReservationsToFile(reservationsMap);
+
+        // Mark the Walk-In booking as CHECKED_IN and save back
+        foundBooking.setStatus("CHECKED_IN");
+        foundBooking.setAssignedRoom(selectedRoom);
+        walkInBookingDAO.saveBookingsToFile(allBookings);
+
+        System.out.println("\n==========================================================================");
+        System.out.println("Guest successfully checked in! Their Confirmation Number is: " + confNum + ". Please record this number.");
+        System.out.println("==========================================================================");
+        System.out.println("Check-In Summary:");
+        System.out.println("  Confirmation No : " + confNum + " -> (You now copy this number to use in other menu options)");
+        System.out.println("  Walk-In Booking : " + foundBooking.getBookingId());
+        System.out.println("  Guest Name      : " + name);
+        System.out.println("  IC Number       : " + ic);
+        System.out.println("  Contact         : " + contact);
+        System.out.println("  Room Assigned   : " + selectedRoom.getRoomId() + " (" + selectedRoom.getRoomType() + ", Floor " + selectedRoom.getFloorNumber() + ")");
+        System.out.println("  Check-In Date   : " + checkIn);
+        System.out.println("  Check-Out Date  : " + checkOut + " (" + actualNights + " night(s))");
+        System.out.println("  Room Rate       : RM " + String.format("%.2f", rate) + " / night");
+        System.out.println("  Estimated Total : RM " + String.format("%.2f", rate * actualNights));
+        System.out.println("==========================================================================");
+        ui.pressEnterToContinue();
+    }
+
+    /**
+     * Feature 6: Update Guest Charges / Extend Stay.
+     * Demonstrates retrieving and mutating an object stored in the HashMap.
+     * Supports lookup by Confirmation Number, Guest Name, or IC Number.
+     */
+    private void updateGuestCharges() {
+        ui.displayHeader("UPDATE GUEST CHARGES / EXTEND STAY");
+        Reservation res = findReservationPrompt("UPDATE GUEST CHARGES / EXTEND STAY", true);
+        if (res == null) {
+            return;
+        }
+
+        System.out.println("Current Folio:");
+        System.out.println(res.toFolioString());
+        ui.displaySectionDivider();
+
+        int updateChoice = ui.getUpdateChargesChoice();
+        switch (updateChoice) {
+            case 1:
+                // Add incidental charge
+                String desc   = ui.inputText("Enter Charge Description (e.g., Room Service, Spa): ");
+                double amount = ui.inputDouble("Enter Charge Amount (RM): ");
+                if (amount <= 0) {
+                    ui.displayMessage("Invalid amount. Must be greater than 0.");
+                } else {
+                    res.addIncidentalCharge(amount);
+                    ui.displayMessage("Charge of RM" + String.format("%.2f", amount) + " (" + desc + ") added.\nNew Total: RM" + String.format("%.2f", res.getTotalAmount()));
+                }
+                break;
+            case 2:
+                // Extend stay
+                String newCheckOut = ui.inputText("Enter New Check-Out Date (YYYY-MM-DD): ");
+                double extraNights  = ui.inputDouble("Enter Number of Additional Nights: ");
+                if (extraNights > 0) {
+                    res.setCheckOutDate(newCheckOut);
+                    res.addIncidentalCharge(extraNights * res.getRoomRate()); // extra night charges
+                    ui.displayMessage("Stay extended to " + newCheckOut + ". Extra RM" +
+                            String.format("%.2f", extraNights * res.getRoomRate()) + " added.");
+                } else {
+                    ui.displayMessage("Invalid number of nights.");
+                }
+                break;
+            case 0:
+                ui.displayMessage("Update cancelled.");
+                return;
+            default:
+                MessageUI.displayInvalidChoiceMessage();
+        }
+        dao.saveReservationsToFile(reservationsMap);
+        ui.pressEnterToContinue();
+    }
+
+    /**
+     * Feature 7: Check-Out Guest — REMOVE from HashMap.
+     * Demonstrates the remove(key) operation on the custom Non-Linear ADT.
+     * Supports lookup by Confirmation Number, Guest Name, or IC Number.
+     */
+    private void checkOutGuest() {
+        ui.displayHeader("CHECK-OUT GUEST (Remove from Active Map)");
+        Reservation res = findReservationPrompt("CHECK-OUT GUEST", true);
+        if (res == null) {
+            return;
+        }
+
+
+        // Show current folio
+        System.out.println("\n--- CURRENT FOLIO ---");
+        System.out.println(res.toFolioString());
+        ui.displaySectionDivider();
+
+        // -----------------------------------------------------------------------
+        // Late Check-Out Detection
+        // Compare today's date vs planned check-out date
+        // -----------------------------------------------------------------------
+        java.time.LocalDate today       = java.time.LocalDate.now();
+        java.time.LocalDate plannedOut  = null;
+        boolean isLate = false;
+        long lateNights = 0;
+        try {
+            plannedOut = java.time.LocalDate.parse(res.getCheckOutDate());
+            if (today.isAfter(plannedOut)) {
+                lateNights = java.time.temporal.ChronoUnit.DAYS.between(plannedOut, today);
+                isLate = true;
+            }
+        } catch (Exception ignored) {}
+
+        if (isLate) {
+            double lateCharge = lateNights * res.getRoomRate();
+            System.out.println("  ==================================================");
+            System.out.println("  [!] LATE CHECK-OUT DETECTED");
+            System.out.printf ("  Planned Check-Out : %s%n", res.getCheckOutDate());
+            System.out.printf ("  Today's Date      : %s%n", today.toString());
+            System.out.printf ("  Extra Nights      : %d night(s)%n", lateNights);
+            System.out.printf ("  Late Charge Added : RM %.2f%n", lateCharge);
+            System.out.println("  ==================================================");
+
+            // Auto-add late night charges as incidental
+            res.addIncidentalCharge(lateCharge);
+            // Update check-out date to today
+            res.setCheckOutDate(today.toString());
+            System.out.println("\n  Late check-out charge of RM" + String.format("%.2f", lateCharge) +
+                    " (" + lateNights + " extra night(s) x RM" + String.format("%.2f", res.getRoomRate()) + ") has been added.");
+
+            System.out.println("\n--- UPDATED FINAL FOLIO ---");
+            System.out.println(res.toFolioString());
+            ui.displaySectionDivider();
+        }
+
+        if (!ui.confirmAction("Check out guest " + res.getGuest().getName() +
+                " and collect RM" + String.format("%.2f", res.getTotalAmount()) + " payment")) {
+            ui.displayMessage("Check-out cancelled.");
+            ui.pressEnterToContinue();
+            return;
+        }
+
+        // Mark as paid and checked-out
+        res.setPaid(true);
+        res.setStatus("Checked-Out");
+
+
+        // Free up the room and trigger Housekeeping status change to Dirty
+        Room room = res.getRoom();
+        if (room != null) {
+            Room matchingRoom = findRoomById(room.getRoomId());
+            if (matchingRoom != null) {
+                matchingRoom.setCurrentStatus("Dirty");
+            } else {
+                room.setCurrentStatus("Dirty");
+            }
+            housekeepingDAO.saveRoomsToFile(roomList);
+        }
+
+        // REMOVE from active HashMap
+        reservationsMap.remove(res.getConfirmationNumber());
+        dao.saveReservationsToFile(reservationsMap);
+
+        ui.displayMessage("Check-out successful for " + res.getGuest().getName() +
+                ".\nRoom " + (room != null ? room.getRoomId() : "N/A") + " status updated to 'Dirty' (pending housekeeping).\nPayment collected: RM" +
+                String.format("%.2f", res.getTotalAmount()));
+        ui.pressEnterToContinue();
+    }
+
+    // =========================================================================
+    // SECTION 3: MANAGEMENT REPORTS
+    // =========================================================================
+
+    /**
+     * Report 1: Daily Front-Desk Occupancy & Room Tier Summary.
+     * Filters active "Checked-In" reservations, sorts them by Room Type
+     * (using Selection Sort), and summarises occupancy by tier.
+     */
+    private void reportDailyOccupancy() {
+        ui.printReportHeader("DAILY FRONT-DESK OCCUPANCY & ROOM TIER SUMMARY");
+
+        Object[] allRes = reservationsMap.values();
+
+        // Filter: only Checked-In
+        Reservation[] checkedIn = new Reservation[allRes.length];
+        int count = 0;
+        for (Object obj : allRes) {
+            Reservation r = (Reservation) obj;
+            if (r != null && "Checked-In".equalsIgnoreCase(r.getStatus())) {
+                checkedIn[count++] = r;
+            }
+        }
+        checkedIn = trimArray(checkedIn, count);
+
+        // Sort by Room Type (alphabetical) using Selection Sort
+        selectionSortByRoomType(checkedIn);
+
+        // Print table
+        System.out.printf("%-10s | %-20s | %-16s | %-10s | %-12s | %-10s%n",
+                "Conf. No.", "Guest Name", "Room Type", "Room ID", "Check-In", "Total (RM)");
+        ui.displayFooter();
+
+        int standard = 0, deluxe = 0, suite = 0;
+        for (Reservation r : checkedIn) {
+            System.out.printf("%-10s | %-20s | %-16s | %-10s | %-12s | RM%-8.2f%n",
+                    r.getConfirmationNumber(),
+                    r.getGuest().getName(),
+                    r.getRoom().getRoomType(),
+                    r.getRoom().getRoomId(),
+                    r.getCheckInDate(),
+                    r.getTotalAmount());
+            String type = r.getRoom().getRoomType().toLowerCase();
+            if (type.contains("standard")) standard++;
+            else if (type.contains("deluxe")) deluxe++;
+            else if (type.contains("suite")) suite++;
+        }
+        ui.displayFooter();
+
+        // Calculate total rooms per tier for occupancy rate
+        int totalStd = 0, totalDlx = 0, totalSte = 0;
+        int totalRoomsCount = roomList.getNumberOfEntries();
+        for (int i = 1; i <= totalRoomsCount; i++) {
+            Room rm = roomList.getEntry(i);
+            String type = rm.getRoomType().toLowerCase();
+            if (type.contains("standard")) totalStd++;
+            else if (type.contains("deluxe")) totalDlx++;
+            else if (type.contains("suite")) totalSte++;
+        }
+
+        System.out.println("\n  OCCUPANCY SUMMARY BY ROOM TIER:");
+        System.out.printf("  %-16s : %d / %d occupied (%.0f%%)%n",
+                "Standard Room", standard, totalStd, totalStd > 0 ? standard * 100.0 / totalStd : 0);
+        System.out.printf("  %-16s : %d / %d occupied (%.0f%%)%n",
+                "Deluxe Room", deluxe, totalDlx, totalDlx > 0 ? deluxe * 100.0 / totalDlx : 0);
+        System.out.printf("  %-16s : %d / %d occupied (%.0f%%)%n",
+                "Suite Room", suite, totalSte, totalSte > 0 ? suite * 100.0 / totalSte : 0);
+
+        int totalOccupied = standard + deluxe + suite;
+        System.out.printf("  %-16s : %d / %d (%.0f%%)%n",
+                "Overall", totalOccupied, totalRoomsCount,
+                totalRoomsCount > 0 ? totalOccupied * 100.0 / totalRoomsCount : 0);
+
+        ui.printReportFooter(checkedIn.length);
+        ui.pressEnterToContinue();
+    }
+
+    /**
+     * Report 2: Pending Settlement & High-Value Guest Analysis.
+     * Filters all reservations where payment is OUTSTANDING,
+     * sorted by Total Amount descending (QuickSort) to highlight highest bills.
+     */
+    private void reportPendingSettlementHighValue() {
+        ui.printReportHeader("PENDING SETTLEMENT & HIGH-VALUE GUEST ANALYSIS");
+
+        Object[] allRes = reservationsMap.values();
+
+        // Filter: outstanding (unpaid) reservations
+        Reservation[] unpaid = new Reservation[allRes.length];
+        int count = 0;
+        for (Object obj : allRes) {
+            Reservation r = (Reservation) obj;
+            if (r != null && !r.isPaid()) {
+                unpaid[count++] = r;
+            }
+        }
+        unpaid = trimArray(unpaid, count);
+
+        // Sort by Total Amount descending using QuickSort
+        quickSortByAmountDesc(unpaid, 0, unpaid.length - 1);
+
+        // Print table
+        System.out.printf("%-10s | %-20s | %-16s | %-10s | %-12s | %-12s | %-10s%n",
+                "Conf. No.", "Guest Name", "Room Type", "Room", "Room Rate", "Incidentals", "TOTAL (RM)");
+        ui.displayFooter();
+
+        double totalOutstanding = 0;
+        for (Reservation r : unpaid) {
+            System.out.printf("%-10s | %-20s | %-16s | %-10s | RM%-10.2f | RM%-10.2f | RM%-8.2f%n",
+                    r.getConfirmationNumber(),
+                    r.getGuest().getName(),
+                    r.getRoom().getRoomType(),
+                    r.getRoom().getRoomId(),
+                    r.getRoomRate(),
+                    r.getIncidentalCharges(),
+                    r.getTotalAmount());
+            totalOutstanding += r.getTotalAmount();
+        }
+        ui.displayFooter();
+
+        System.out.printf("%n  TOTAL OUTSTANDING BALANCE : RM%.2f%n", totalOutstanding);
+
+        // Highlight high-value guests (> RM1000)
+        System.out.println("\n  HIGH-VALUE ALERTS (Outstanding > RM 1,000.00):");
+        boolean anyHighValue = false;
+        for (Reservation r : unpaid) {
+            if (r.getTotalAmount() > 1000.0) {
+                System.out.printf("  [!] %s (%s) - Room %s - RM%.2f OUTSTANDING%n",
+                        r.getGuest().getName(),
+                        r.getGuest().getContactNumber(),
+                        r.getRoom().getRoomId(),
+                        r.getTotalAmount());
+                anyHighValue = true;
+            }
+        }
+        if (!anyHighValue) {
+            System.out.println("  No high-value outstanding bills at this time.");
+        }
+
+        ui.printReportFooter(unpaid.length);
+        ui.pressEnterToContinue();
+    }
+
+    // =========================================================================
+    // HELPER / UTILITY METHODS
+    // =========================================================================
+
+    private Room findRoomById(String roomId) {
+        if (roomId == null) return null;
+        for (int i = 1; i <= roomList.getNumberOfEntries(); i++) {
+            Room r = roomList.getEntry(i);
+            if (r.getRoomId().equalsIgnoreCase(roomId)) {
+                return r;
+            }
+        }
+        return null;
+    }
+
+    private Reservation[] trimArray(Reservation[] arr, int size) {
+        Reservation[] trimmed = new Reservation[size];
+        for (int i = 0; i < size; i++) trimmed[i] = arr[i];
+        return trimmed;
+    }
+
+    // =========================================================================
+    // SORTING ALGORITHMS
+    // =========================================================================
+
+    /**
+     * Selection Sort — sorts Reservations by Room Type alphabetically (A-Z).
+     * Used in Report 1: Daily Occupancy.
+     */
+    private void selectionSortByRoomType(Reservation[] arr) {
+        int n = arr.length;
+        for (int i = 0; i < n - 1; i++) {
+            int minIdx = i;
+            for (int j = i + 1; j < n; j++) {
+                if (arr[j].getRoom().getRoomType().compareToIgnoreCase(
+                        arr[minIdx].getRoom().getRoomType()) < 0) {
+                    minIdx = j;
+                }
+            }
+            if (minIdx != i) {
+                Reservation temp = arr[i];
+                arr[i] = arr[minIdx];
+                arr[minIdx] = temp;
+            }
+        }
+    }
+
+    /**
+     * QuickSort — sorts Reservations by Total Amount descending.
+     * Used in Report 2: Pending Settlement.
+     */
+    private void quickSortByAmountDesc(Reservation[] arr, int low, int high) {
+        if (low < high) {
+            int pi = partitionByAmount(arr, low, high);
+            quickSortByAmountDesc(arr, low, pi - 1);
+            quickSortByAmountDesc(arr, pi + 1, high);
+        }
+    }
+
+    private int partitionByAmount(Reservation[] arr, int low, int high) {
+        double pivot = arr[high].getTotalAmount();
+        int i = low - 1;
+        for (int j = low; j < high; j++) {
+            if (arr[j].getTotalAmount() > pivot) { // descending
+                i++;
+                Reservation temp = arr[i];
+                arr[i] = arr[j];
+                arr[j] = temp;
+            }
+        }
+        Reservation temp = arr[i + 1];
+        arr[i + 1] = arr[high];
+        arr[high] = temp;
+        return i + 1;
+    }
+}

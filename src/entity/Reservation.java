@@ -59,7 +59,25 @@ public class Reservation implements Serializable, Comparable<Reservation> {
         if (amount > 0) this.incidentalCharges += amount;
     }
 
-    public double getTotalAmount() { return roomRate + incidentalCharges; }
+    /**
+     * Calculates number of nights between check-in and check-out dates.
+     * Falls back to 1 night if dates are unparseable.
+     */
+    public long getNumberOfNights() {
+        try {
+            java.time.LocalDate in  = java.time.LocalDate.parse(checkInDate);
+            java.time.LocalDate out = java.time.LocalDate.parse(checkOutDate);
+            long nights = java.time.temporal.ChronoUnit.DAYS.between(in, out);
+            return nights > 0 ? nights : 1;
+        } catch (Exception e) {
+            return 1;
+        }
+    }
+
+    /** Total = (roomRate × nights) + incidentalCharges */
+    public double getTotalAmount() {
+        return (roomRate * getNumberOfNights()) + incidentalCharges;
+    }
 
     public boolean isPaid() { return isPaid; }
     public void setPaid(boolean paid) { this.isPaid = paid; }
@@ -69,6 +87,7 @@ public class Reservation implements Serializable, Comparable<Reservation> {
 
     /** Returns a detailed folio-style summary for billing inquiries. */
     public String toFolioString() {
+        long nights = getNumberOfNights();
         return String.format(
             "  Confirmation No : %s\n" +
             "  Guest Name      : %s\n" +
@@ -77,7 +96,9 @@ public class Reservation implements Serializable, Comparable<Reservation> {
             "  Room            : %s (%s)\n" +
             "  Check-In Date   : %s\n" +
             "  Check-Out Date  : %s\n" +
-            "  Room Rate       : RM%.2f\n" +
+            "  Nights          : %d night(s)\n" +
+            "  Room Rate       : RM%.2f / night\n" +
+            "  Room Subtotal   : RM%.2f\n" +
             "  Incidentals     : RM%.2f\n" +
             "  ---------------------------------\n" +
             "  TOTAL AMOUNT    : RM%.2f\n" +
@@ -87,12 +108,15 @@ public class Reservation implements Serializable, Comparable<Reservation> {
             guest.getName(), guest.getIcNumber(), guest.getContactNumber(),
             room.getRoomId(), room.getRoomType(),
             checkInDate, checkOutDate,
-            roomRate, incidentalCharges,
+            nights,
+            roomRate, roomRate * nights,
+            incidentalCharges,
             getTotalAmount(),
             isPaid ? "PAID" : "OUTSTANDING",
             status
         );
     }
+
 
     @Override
     public String toString() {
