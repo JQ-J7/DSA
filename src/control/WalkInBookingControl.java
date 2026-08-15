@@ -252,41 +252,51 @@ public class WalkInBookingControl {
             return;
         }
 
-        WalkInBooking nextBooking = waitingQueue.getFront(); // Peek front guest
-        System.out.println("\n--- CURRENT SYSTEM ROOM TABLE ---");
-        boundary.HousekeepingUI.displayRoomTable(roomList);
+        // Scan queue to find the FIRST guest who has a matching 'Ready for Check-In' room available
+        LinkedQueue<WalkInBooking> lq = (LinkedQueue<WalkInBooking>) waitingQueue;
+        ListInterface<WalkInBooking> queueList = lq.toList();
 
-        System.out.println("\nNext Guest at Front of Queue:");
-        System.out.println(nextBooking.toDetailString());
-
-        // Search for an available room matching requested room type
+        WalkInBooking allocatableBooking = null;
         Room matchedRoom = null;
-        for (int i = 1; i <= roomList.getNumberOfEntries(); i++) {
-            Room r = roomList.getEntry(i);
-            if (isRoomTypeMatch(r.getRoomType(), nextBooking.getRequestedRoomType()) &&
-                    "Ready for Check-In".equalsIgnoreCase(r.getCurrentStatus())) {
-                matchedRoom = r;
+
+        for (int i = 1; i <= queueList.getNumberOfEntries(); i++) {
+            WalkInBooking candidate = queueList.getEntry(i);
+            for (int j = 1; j <= roomList.getNumberOfEntries(); j++) {
+                Room r = roomList.getEntry(j);
+                if (isRoomTypeMatch(r.getRoomType(), candidate.getRequestedRoomType()) &&
+                        "Ready for Check-In".equalsIgnoreCase(r.getCurrentStatus())) {
+                    allocatableBooking = candidate;
+                    matchedRoom = r;
+                    break;
+                }
+            }
+            if (allocatableBooking != null) {
                 break;
             }
         }
 
-        if (matchedRoom == null) {
-            ui.displayMessage("No room of type '" + nextBooking.getRequestedRoomType()
-                    + "' is currently 'Ready for Check-In'.\n" +
-                    "Guest remains at the front of the queue until housekeeping releases a matching room.");
+        if (allocatableBooking == null || matchedRoom == null) {
+            ui.displayMessage("No pending guests in queue currently have matching 'Ready for Check-In' rooms.\n" +
+                    "Please wait for Housekeeping to release ready rooms.");
             ui.pressEnterToContinue();
             return;
         }
 
-        if (ui.confirmAction(
-                "Assign Room " + matchedRoom.getRoomId() + " to " + nextBooking.getGuest().getName() + "?")) {
-            // Dequeue from Queue Linear ADT
-            waitingQueue.dequeue();
+        System.out.println("\n--- CURRENT SYSTEM ROOM TABLE ---");
+        boundary.HousekeepingUI.displayRoomTable(roomList);
 
+        System.out.println("\nNext Guest Eligible for Room Allocation:");
+        System.out.println(allocatableBooking.toDetailString());
+
+        if (ui.confirmAction(
+                "Assign Room " + matchedRoom.getRoomId() + " to " + allocatableBooking.getGuest().getName() + "?")) {
             // Update entity states
             matchedRoom.setCurrentStatus("Occupied");
-            nextBooking.setAssignedRoom(matchedRoom);
-            nextBooking.setStatus("ALLOCATED");
+            allocatableBooking.setAssignedRoom(matchedRoom);
+            allocatableBooking.setStatus("ALLOCATED");
+
+            // Rebuild queue from allBookings (automatically removes allocated guest from waitingQueue)
+            rebuildWaitingQueue();
 
             // Persist changes
             bookingDAO.saveBookingsToFile(allBookings);
@@ -294,11 +304,11 @@ public class WalkInBookingControl {
 
             ui.displayMessage(String.format(
                     "ROOM ALLOCATION SUCCESSFUL!\n" +
-                            "Guest      : %s\n" +
-                            "Booking ID : %s\n" +
+                            "Guest        : %s\n" +
+                            "Booking ID   : %s\n" +
                             "Room Assigned: %s (%s, Floor %d)\n" +
                             "Remaining Queue Size: %d",
-                    nextBooking.getGuest().getName(), nextBooking.getBookingId(),
+                    allocatableBooking.getGuest().getName(), allocatableBooking.getBookingId(),
                     matchedRoom.getRoomId(), matchedRoom.getRoomType(), matchedRoom.getFloorNumber(),
                     waitingQueue.size()));
         } else {
