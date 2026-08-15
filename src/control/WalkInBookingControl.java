@@ -18,7 +18,7 @@ import java.time.format.DateTimeFormatter;
  * Manages chronological arrivals using custom Linear Queue ADT (`LinkedQueue`).
  * Adheres strictly to ECB architecture constraints.
  * 
- * @author Walk-In Subsystem Lead
+ * @author Chan Shao Lun
  */
 public class WalkInBookingControl {
 
@@ -131,19 +131,22 @@ public class WalkInBookingControl {
         }
         String bookingType = (channelChoice == 2) ? "Standard Advance" : "Walk-In";
 
-        String ic = ui.inputRequiredText("Enter Guest IC Number (e.g., 990101-14-1234) [0 to Back]: ", "IC Number cannot be empty. Please try again.");
+        String ic = ui.inputRequiredText("Enter Guest IC Number (e.g., 990101-14-1234) [0 to Back]: ",
+                "IC Number cannot be empty. Please try again.");
         if ("0".equals(ic)) {
             ui.displayMessage("Registration cancelled.");
             return;
         }
 
-        String name = ui.inputRequiredText("Enter Guest Full Name [0 to Back]: ", "Guest name cannot be empty. Please try again.");
+        String name = ui.inputRequiredText("Enter Guest Full Name [0 to Back]: ",
+                "Guest name cannot be empty. Please try again.");
         if ("0".equals(name)) {
             ui.displayMessage("Registration cancelled.");
             return;
         }
 
-        String contact = ui.inputRequiredText("Enter Contact Number (e.g., 012-3456789) [0 to Back]: ", "Contact number cannot be empty. Please try again.");
+        String contact = ui.inputRequiredText("Enter Contact Number (e.g., 012-3456789) [0 to Back]: ",
+                "Contact number cannot be empty. Please try again.");
         if ("0".equals(contact)) {
             ui.displayMessage("Registration cancelled.");
             return;
@@ -174,8 +177,7 @@ public class WalkInBookingControl {
         String timestamp = LocalDateTime.now().format(dtf);
 
         WalkInBooking newBooking = new WalkInBooking(
-                bookingId, guest, roomType, nights, rate, timestamp, bookingType, "WAITING"
-        );
+                bookingId, guest, roomType, nights, rate, timestamp, bookingType, "WAITING");
 
         // Linear ADT Enqueue (FIFO placement)
         waitingQueue.enqueue(newBooking);
@@ -183,14 +185,14 @@ public class WalkInBookingControl {
         bookingDAO.saveBookingsToFile(allBookings);
 
         ui.displayMessage(String.format(
-            "Successfully Registered Arrival!\n" +
-            "Booking ID   : %s\n" +
-            "Guest Name   : %s\n" +
-            "Channel      : %s\n" +
-            "Room Type    : %s\n" +
-            "Queue Position: %d (Enqueued in FIFO order)",
-            bookingId, name, bookingType, roomType, waitingQueue.size()
-        ));
+                "Successfully Registered Arrival!\n" +
+                        "Booking ID   : %s\n" +
+                        "Guest Name   : %s\n" +
+                        "Channel      : %s\n" +
+                        "Room Type    : %s\n" +
+                        "Queue Position: %d (Enqueued in FIFO order)",
+                bookingId, name, bookingType, roomType, waitingQueue.size()));
+        ui.pressEnterToContinue();
     }
 
     private void viewWaitingQueue() {
@@ -207,7 +209,8 @@ public class WalkInBookingControl {
 
         System.out.printf("%-6s | %-10s | %-18s | %-15s | %-10s | %-10s | %s%n",
                 "Pos", "Booking ID", "Guest Name", "Channel", "Room Type", "Nights", "Registration Time");
-        System.out.println("-----------------------------------------------------------------------------------------------------");
+        System.out.println(
+                "-----------------------------------------------------------------------------------------------------");
 
         for (int i = 1; i <= queueList.getNumberOfEntries(); i++) {
             WalkInBooking b = queueList.getEntry(i);
@@ -215,7 +218,8 @@ public class WalkInBookingControl {
                     i, b.getBookingId(), b.getGuest().getName(), b.getBookingType(),
                     b.getRequestedRoomType(), b.getNumberOfNights(), b.getRegistrationTime());
         }
-        System.out.println("-----------------------------------------------------------------------------------------------------");
+        System.out.println(
+                "-----------------------------------------------------------------------------------------------------");
         System.out.printf("Total Waiting Guests in Queue: %d%n", queueList.getNumberOfEntries());
 
         ui.pressEnterToContinue();
@@ -241,19 +245,22 @@ public class WalkInBookingControl {
         for (int i = 1; i <= roomList.getNumberOfEntries(); i++) {
             Room r = roomList.getEntry(i);
             if (isRoomTypeMatch(r.getRoomType(), nextBooking.getRequestedRoomType()) &&
-                "Ready for Check-In".equalsIgnoreCase(r.getCurrentStatus())) {
+                    "Ready for Check-In".equalsIgnoreCase(r.getCurrentStatus())) {
                 matchedRoom = r;
                 break;
             }
         }
 
         if (matchedRoom == null) {
-            ui.displayMessage("No room of type '" + nextBooking.getRequestedRoomType() + "' is currently 'Ready for Check-In'.\n" +
-                              "Guest remains at the front of the queue until housekeeping releases a matching room.");
+            ui.displayMessage("No room of type '" + nextBooking.getRequestedRoomType()
+                    + "' is currently 'Ready for Check-In'.\n" +
+                    "Guest remains at the front of the queue until housekeeping releases a matching room.");
+            ui.pressEnterToContinue();
             return;
         }
 
-        if (ui.confirmAction("Assign Room " + matchedRoom.getRoomId() + " to " + nextBooking.getGuest().getName() + "?")) {
+        if (ui.confirmAction(
+                "Assign Room " + matchedRoom.getRoomId() + " to " + nextBooking.getGuest().getName() + "?")) {
             // Dequeue from Queue Linear ADT
             waitingQueue.dequeue();
 
@@ -267,25 +274,27 @@ public class WalkInBookingControl {
             housekeepingDAO.saveRoomsToFile(roomList);
 
             ui.displayMessage(String.format(
-                "ROOM ALLOCATION SUCCESSFUL!\n" +
-                "Guest      : %s\n" +
-                "Booking ID : %s\n" +
-                "Room Assigned: %s (%s, Floor %d)\n" +
-                "Remaining Queue Size: %d",
-                nextBooking.getGuest().getName(), nextBooking.getBookingId(),
-                matchedRoom.getRoomId(), matchedRoom.getRoomType(), matchedRoom.getFloorNumber(),
-                waitingQueue.size()
-            ));
+                    "ROOM ALLOCATION SUCCESSFUL!\n" +
+                            "Guest      : %s\n" +
+                            "Booking ID : %s\n" +
+                            "Room Assigned: %s (%s, Floor %d)\n" +
+                            "Remaining Queue Size: %d",
+                    nextBooking.getGuest().getName(), nextBooking.getBookingId(),
+                    matchedRoom.getRoomId(), matchedRoom.getRoomType(), matchedRoom.getFloorNumber(),
+                    waitingQueue.size()));
         } else {
             ui.displayMessage("Allocation cancelled. Guest remains in queue.");
         }
+
+        ui.pressEnterToContinue();
     }
 
     private void cancelOrModifyBooking() {
         ui.displayHeader("CANCEL OR MODIFY PENDING REGISTRATION");
 
         String queryId = ui.inputText("Enter Booking ID to Cancel/Modify (e.g., WB1001) [0 to Back]: ");
-        if (queryId.isEmpty() || "0".equals(queryId)) return;
+        if (queryId.isEmpty() || "0".equals(queryId))
+            return;
 
         WalkInBooking booking = findBookingById(queryId);
         if (booking == null) {
@@ -297,7 +306,8 @@ public class WalkInBookingControl {
         System.out.println(booking.toDetailString());
 
         if (!"WAITING".equalsIgnoreCase(booking.getStatus())) {
-            ui.displayMessage("Only pending ('WAITING') registrations can be modified/cancelled. Current status: " + booking.getStatus());
+            ui.displayMessage("Only pending ('WAITING') registrations can be modified/cancelled. Current status: "
+                    + booking.getStatus());
             return;
         }
 
@@ -306,7 +316,8 @@ public class WalkInBookingControl {
         System.out.println(" [2] Modify Requested Room Type");
         System.out.println(" [0] Go Back");
         int choice = ui.inputIntInRange("Select [0-2]: ", 0, 2);
-        if (choice == 0) return;
+        if (choice == 0)
+            return;
 
         if (choice == 1) {
             if (ui.confirmAction("Cancel registration for " + booking.getBookingId() + "?")) {
@@ -342,26 +353,33 @@ public class WalkInBookingControl {
         System.out.print("Select Search Option [0-4]: ");
         int choice = ui.inputIntInRange("Select Search Option [0-4]: ", 0, 4);
 
-        if (choice == 0) return;
+        if (choice == 0)
+            return;
 
         if (choice == 1) {
             String id = ui.inputRequiredText("Enter Booking ID [0 to Back]: ", "Booking ID cannot be empty.");
-            if ("0".equals(id)) return;
+            if ("0".equals(id))
+                return;
             WalkInBooking found = findBookingById(id);
             displaySearchResult(found);
         } else if (choice == 2) {
             String ic = ui.inputRequiredText("Enter Guest IC Number [0 to Back]: ", "IC Number cannot be empty.");
-            if ("0".equals(ic)) return;
+            if ("0".equals(ic))
+                return;
             WalkInBooking found = findBookingByIC(ic);
             displaySearchResult(found);
         } else if (choice == 3) {
-            String nameKey = ui.inputRequiredText("Enter Guest Name Keyword [0 to Back]: ", "Search keyword cannot be empty.");
-            if ("0".equals(nameKey)) return;
+            String nameKey = ui.inputRequiredText("Enter Guest Name Keyword [0 to Back]: ",
+                    "Search keyword cannot be empty.");
+            if ("0".equals(nameKey))
+                return;
             ListInterface<WalkInBooking> results = searchBookingsByName(nameKey);
             displaySearchResultsList(results);
         } else if (choice == 4) {
-            String id = ui.inputRequiredText("Enter Booking ID for Binary Search [0 to Back]: ", "Booking ID cannot be empty.");
-            if ("0".equals(id)) return;
+            String id = ui.inputRequiredText("Enter Booking ID for Binary Search [0 to Back]: ",
+                    "Booking ID cannot be empty.");
+            if ("0".equals(id))
+                return;
             WalkInBooking found = binarySearchById(id);
             displaySearchResult(found);
         } else {
@@ -473,7 +491,8 @@ public class WalkInBookingControl {
 
     /**
      * Management Report 1: Peak Season Queue Allocation & Efficiency Summary
-     * Combines search/sort, filters by status/room type, displays allocation efficiency metrics.
+     * Combines search/sort, filters by status/room type, displays allocation
+     * efficiency metrics.
      */
     private void generateQueueEfficiencyReport() {
         ui.printReportHeader("PEAK SEASON QUEUE ALLOCATION & ROOM DEMAND EFFICIENCY SUMMARY");
@@ -485,13 +504,16 @@ public class WalkInBookingControl {
         System.out.println(" [0] Back to Walk-In Booking Menu");
         System.out.print("Select Filter Criteria [0-3]: ");
         int filterChoice = ui.inputIntInRange("Select Filter Criteria [0-3]: ", 0, 3);
-        if (filterChoice == 0) return;
+        if (filterChoice == 0)
+            return;
 
         ListInterface<WalkInBooking> filteredList = new ArrayList<>();
         for (int i = 1; i <= allBookings.getNumberOfEntries(); i++) {
             WalkInBooking b = allBookings.getEntry(i);
-            if (filterChoice == 2 && !"WAITING".equalsIgnoreCase(b.getStatus())) continue;
-            if (filterChoice == 3 && !"ALLOCATED".equalsIgnoreCase(b.getStatus())) continue;
+            if (filterChoice == 2 && !"WAITING".equalsIgnoreCase(b.getStatus()))
+                continue;
+            if (filterChoice == 3 && !"ALLOCATED".equalsIgnoreCase(b.getStatus()))
+                continue;
             filteredList.add(b);
         }
 
@@ -510,13 +532,17 @@ public class WalkInBookingControl {
 
         System.out.printf("%-10s | %-18s | %-15s | %-12s | %-10s | RM %-8s | %s%n",
                 "Booking ID", "Guest Name", "Channel", "Room Type", "Status", "Est Cost", "Registration Time");
-        System.out.println("---------------------------------------------------------------------------------------------------------");
+        System.out.println(
+                "---------------------------------------------------------------------------------------------------------");
 
         for (int i = 1; i <= filteredList.getNumberOfEntries(); i++) {
             WalkInBooking b = filteredList.getEntry(i);
-            if ("WAITING".equalsIgnoreCase(b.getStatus())) totalWaiting++;
-            else if ("ALLOCATED".equalsIgnoreCase(b.getStatus())) totalAllocated++;
-            else if ("CANCELLED".equalsIgnoreCase(b.getStatus())) totalCancelled++;
+            if ("WAITING".equalsIgnoreCase(b.getStatus()))
+                totalWaiting++;
+            else if ("ALLOCATED".equalsIgnoreCase(b.getStatus()))
+                totalAllocated++;
+            else if ("CANCELLED".equalsIgnoreCase(b.getStatus()))
+                totalCancelled++;
 
             totalEstRevenue += b.getTotalEstimatedCost();
 
@@ -524,10 +550,12 @@ public class WalkInBookingControl {
                     b.getBookingId(), b.getGuest().getName(), b.getBookingType(),
                     b.getRequestedRoomType(), b.getStatus(), b.getTotalEstimatedCost(), b.getRegistrationTime());
         }
-        System.out.println("---------------------------------------------------------------------------------------------------------");
+        System.out.println(
+                "---------------------------------------------------------------------------------------------------------");
 
-        double allocationRate = (filteredList.getNumberOfEntries() > 0) ?
-                ((double) totalAllocated / filteredList.getNumberOfEntries()) * 100.0 : 0.0;
+        double allocationRate = (filteredList.getNumberOfEntries() > 0)
+                ? ((double) totalAllocated / filteredList.getNumberOfEntries()) * 100.0
+                : 0.0;
 
         System.out.println("\n--- QUEUE OPERATIONAL METRICS ---");
         System.out.printf("  Pending Queue (Waiting) : %d guest(s)%n", totalWaiting);
@@ -542,7 +570,8 @@ public class WalkInBookingControl {
 
     /**
      * Management Report 2: Booking Channel Performance & Financial Forecast
-     * Combines multi-criteria filtering, Bubble sort by revenue/nights, financial projections.
+     * Combines multi-criteria filtering, Bubble sort by revenue/nights, financial
+     * projections.
      */
     private void generateChannelPerformanceReport() {
         ui.printReportHeader("BOOKING CHANNEL PERFORMANCE & REVENUE CONTRIBUTION FORECAST");
@@ -554,13 +583,16 @@ public class WalkInBookingControl {
         System.out.println(" [0] Back to Walk-In Booking Menu");
         System.out.print("Select Filter [0-3]: ");
         int channelFilter = ui.inputIntInRange("Select Filter [0-3]: ", 0, 3);
-        if (channelFilter == 0) return;
+        if (channelFilter == 0)
+            return;
 
         ListInterface<WalkInBooking> filteredList = new ArrayList<>();
         for (int i = 1; i <= allBookings.getNumberOfEntries(); i++) {
             WalkInBooking b = allBookings.getEntry(i);
-            if (channelFilter == 2 && !"Walk-In".equalsIgnoreCase(b.getBookingType())) continue;
-            if (channelFilter == 3 && !"Standard Advance".equalsIgnoreCase(b.getBookingType())) continue;
+            if (channelFilter == 2 && !"Walk-In".equalsIgnoreCase(b.getBookingType()))
+                continue;
+            if (channelFilter == 3 && !"Standard Advance".equalsIgnoreCase(b.getBookingType()))
+                continue;
             filteredList.add(b);
         }
 
@@ -580,7 +612,8 @@ public class WalkInBookingControl {
 
         System.out.printf("%-10s | %-18s | %-15s | %-12s | %-6s | RM %-10s | %s%n",
                 "Booking ID", "Guest Name", "Channel", "Room Type", "Nights", "Total Cost", "Status");
-        System.out.println("---------------------------------------------------------------------------------------------------------");
+        System.out.println(
+                "---------------------------------------------------------------------------------------------------------");
 
         for (int i = 1; i <= filteredList.getNumberOfEntries(); i++) {
             WalkInBooking b = filteredList.getEntry(i);
@@ -597,14 +630,18 @@ public class WalkInBookingControl {
                     b.getBookingId(), b.getGuest().getName(), b.getBookingType(),
                     b.getRequestedRoomType(), b.getNumberOfNights(), b.getTotalEstimatedCost(), b.getStatus());
         }
-        System.out.println("---------------------------------------------------------------------------------------------------------");
+        System.out.println(
+                "---------------------------------------------------------------------------------------------------------");
 
-        double avgNights = (filteredList.getNumberOfEntries() > 0) ?
-                (double) totalNights / filteredList.getNumberOfEntries() : 0.0;
+        double avgNights = (filteredList.getNumberOfEntries() > 0)
+                ? (double) totalNights / filteredList.getNumberOfEntries()
+                : 0.0;
 
         System.out.println("\n--- FINANCIAL & CHANNEL PERFORMANCE BREAKDOWN ---");
-        System.out.printf("  Walk-In Volume           : %d booking(s) | Projected Revenue: RM %.2f%n", countWalkIn, revWalkIn);
-        System.out.printf("  Standard Advance Volume  : %d booking(s) | Projected Revenue: RM %.2f%n", countAdvance, revAdvance);
+        System.out.printf("  Walk-In Volume           : %d booking(s) | Projected Revenue: RM %.2f%n", countWalkIn,
+                revWalkIn);
+        System.out.printf("  Standard Advance Volume  : %d booking(s) | Projected Revenue: RM %.2f%n", countAdvance,
+                revAdvance);
         System.out.printf("  Combined Total Revenue   : RM %.2f%n", (revWalkIn + revAdvance));
         System.out.printf("  Average Length of Stay   : %.1f night(s)%n", avgNights);
 
@@ -665,13 +702,16 @@ public class WalkInBookingControl {
     }
 
     private double getRateForRoomType(String roomType) {
-        if (roomType != null && roomType.toLowerCase().contains("deluxe")) return 350.00;
-        if (roomType != null && roomType.toLowerCase().contains("suite")) return 600.00;
+        if (roomType != null && roomType.toLowerCase().contains("deluxe"))
+            return 350.00;
+        if (roomType != null && roomType.toLowerCase().contains("suite"))
+            return 600.00;
         return 200.00; // Standard Room
     }
 
     private boolean isRoomTypeMatch(String type1, String type2) {
-        if (type1 == null || type2 == null) return false;
+        if (type1 == null || type2 == null)
+            return false;
         String t1 = type1.toLowerCase().replace("room", "").trim();
         String t2 = type2.toLowerCase().replace("room", "").trim();
         return t1.equals(t2);

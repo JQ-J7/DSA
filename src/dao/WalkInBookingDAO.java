@@ -9,7 +9,7 @@ import java.io.*;
  * Data Access Object for Walk-In Registrations and Standard Bookings.
  * Handles reading from and writing to binary files using Object Streams.
  * 
- * @author Walk-In Subsystem Lead
+ * @author Chan Shao Lun
  */
 public class WalkInBookingDAO {
 

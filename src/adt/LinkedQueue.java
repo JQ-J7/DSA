@@ -6,7 +6,7 @@ import java.io.Serializable;
  * Node-based implementation of the QueueInterface (Linear ADT).
  * Maintains First-In, First-Out (FIFO) ordering for walk-in registrations.
  * 
- * @author Walk-In Subsystem Lead
+ * @author Chan Shao Lun
  * @param <T> Data type of elements stored in the queue
  */
 public class LinkedQueue<T> implements QueueInterface<T>, Serializable {
@@ -74,7 +74,8 @@ public class LinkedQueue<T> implements QueueInterface<T>, Serializable {
     }
 
     /**
-     * Converts queue contents to a ListInterface for iteration/reporting without mutating the queue.
+     * Converts queue contents to a ListInterface for iteration/reporting without
+     * mutating the queue.
      * 
      * @return ListInterface containing all elements in FIFO order.
      */

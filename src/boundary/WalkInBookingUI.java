@@ -3,10 +3,11 @@ package boundary;
 import java.util.Scanner;
 
 /**
- * Console Boundary UI class for Walk-In Registrations & Standard Booking Procedure.
+ * Console Boundary UI class for Walk-In Registrations & Standard Booking
+ * Procedure.
  * Adheres strictly to the ECB pattern for user input and console rendering.
  * 
- * @author Walk-In Subsystem Lead
+ * @author Chan Shao Lun
  */
 public class WalkInBookingUI {
 
@@ -35,7 +36,8 @@ public class WalkInBookingUI {
             System.out.println("==========================================================================");
             System.out.print("Select Choice [0-7]: ");
 
-            if (!scanner.hasNextLine()) return 0;
+            if (!scanner.hasNextLine())
+                return 0;
             String input = scanner.nextLine().trim();
             try {
                 int choice = Integer.parseInt(input);
@@ -56,11 +58,15 @@ public class WalkInBookingUI {
             System.out.println(" [2] Standard Advance Reservation");
             System.out.println(" [0] Back to Menu");
             System.out.print("Select Option [0-2]: ");
-            if (!scanner.hasNextLine()) return 0;
+            if (!scanner.hasNextLine())
+                return 0;
             String s = scanner.nextLine().trim();
-            if ("0".equals(s)) return 0;
-            if ("1".equals(s)) return 1;
-            if ("2".equals(s)) return 2;
+            if ("0".equals(s))
+                return 0;
+            if ("1".equals(s))
+                return 1;
+            if ("2".equals(s))
+                return 2;
             displayMessage("Invalid option! Please select 0, 1, or 2.");
         }
     }
@@ -73,13 +79,18 @@ public class WalkInBookingUI {
             System.out.println(" [3] Suite Room    (RM 600.00 / night)");
             System.out.println(" [0] Back to Menu");
             System.out.print("Select Option [0-3]: ");
-            if (!scanner.hasNextLine()) return "CANCEL";
+            if (!scanner.hasNextLine())
+                return "CANCEL";
             String s = scanner.nextLine().trim();
             switch (s) {
-                case "1": return "Standard Room";
-                case "2": return "Deluxe Room";
-                case "3": return "Suite Room";
-                case "0": return "CANCEL";
+                case "1":
+                    return "Standard Room";
+                case "2":
+                    return "Deluxe Room";
+                case "3":
+                    return "Suite Room";
+                case "0":
+                    return "CANCEL";
                 default:
                     displayMessage("Invalid option! Please select 0, 1, 2, or 3.");
             }
@@ -88,14 +99,16 @@ public class WalkInBookingUI {
 
     public String inputText(String prompt) {
         System.out.print(prompt);
-        if (!scanner.hasNextLine()) return "";
+        if (!scanner.hasNextLine())
+            return "";
         return scanner.nextLine().trim();
     }
 
     public String inputRequiredText(String prompt, String errorMessage) {
         while (true) {
             System.out.print(prompt);
-            if (!scanner.hasNextLine()) return "";
+            if (!scanner.hasNextLine())
+                return "";
             String input = scanner.nextLine().trim();
             if (!input.isEmpty()) {
                 return input;
@@ -107,7 +120,8 @@ public class WalkInBookingUI {
     public int inputInt(String prompt) {
         while (true) {
             System.out.print(prompt);
-            if (!scanner.hasNextLine()) return 0;
+            if (!scanner.hasNextLine())
+                return 0;
             String input = scanner.nextLine().trim();
             try {
                 return Integer.parseInt(input);
@@ -120,7 +134,8 @@ public class WalkInBookingUI {
     public int inputIntInRange(String prompt, int min, int max) {
         while (true) {
             System.out.print(prompt);
-            if (!scanner.hasNextLine()) return min;
+            if (!scanner.hasNextLine())
+                return min;
             String input = scanner.nextLine().trim();
             try {
                 int val = Integer.parseInt(input);
@@ -129,7 +144,8 @@ public class WalkInBookingUI {
                 }
                 displayMessage(String.format("Invalid option! Please enter a number between %d and %d.", min, max));
             } catch (NumberFormatException e) {
-                displayMessage(String.format("Invalid input! Please enter a valid number between %d and %d.", min, max));
+                displayMessage(
+                        String.format("Invalid input! Please enter a valid number between %d and %d.", min, max));
             }
         }
     }
@@ -141,10 +157,13 @@ public class WalkInBookingUI {
             System.out.println(" [1] Yes, Proceed");
             System.out.println(" [0] No, Cancel");
             System.out.print("Select [0-1]: ");
-            if (!scanner.hasNextLine()) return false;
+            if (!scanner.hasNextLine())
+                return false;
             String s = scanner.nextLine().trim();
-            if ("1".equals(s)) return true;
-            if ("0".equals(s)) return false;
+            if ("1".equals(s))
+                return true;
+            if ("0".equals(s))
+                return false;
             displayMessage("Invalid choice! Please select 1 (Yes) or 0 (No).");
         }
     }
@@ -173,6 +192,7 @@ public class WalkInBookingUI {
 
     public void pressEnterToContinue() {
         System.out.print("\nPress [ENTER] to return to menu...");
-        if (scanner.hasNextLine()) scanner.nextLine();
+        if (scanner.hasNextLine())
+            scanner.nextLine();
     }
 }

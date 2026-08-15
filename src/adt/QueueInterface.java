@@ -4,7 +4,7 @@ package adt;
  * Interface for a Queue Abstract Data Type (ADT).
  * Provides operations to enqueue, dequeue, and inspect elements in FIFO order.
  * 
- * @author Walk-In Subsystem Lead
+ * @author Chan Shao Lun
  * @param <T> Data type of elements stored in the queue
  */
 public interface QueueInterface<T> {
