@@ -252,41 +252,51 @@ public class WalkInBookingControl {
             return;
         }
 
-        WalkInBooking nextBooking = waitingQueue.getFront(); // Peek front guest
-        System.out.println("\n--- CURRENT SYSTEM ROOM TABLE ---");
-        boundary.HousekeepingUI.displayRoomTable(roomList);
+        // Scan queue to find the FIRST guest who has a matching 'Ready for Check-In' room available
+        LinkedQueue<WalkInBooking> lq = (LinkedQueue<WalkInBooking>) waitingQueue;
+        ListInterface<WalkInBooking> queueList = lq.toList();
 
-        System.out.println("\nNext Guest at Front of Queue:");
-        System.out.println(nextBooking.toDetailString());
-
-        // Search for an available room matching requested room type
+        WalkInBooking allocatableBooking = null;
         Room matchedRoom = null;
-        for (int i = 1; i <= roomList.getNumberOfEntries(); i++) {
-            Room r = roomList.getEntry(i);
-            if (isRoomTypeMatch(r.getRoomType(), nextBooking.getRequestedRoomType()) &&
-                    "Ready for Check-In".equalsIgnoreCase(r.getCurrentStatus())) {
-                matchedRoom = r;
+
+        for (int i = 1; i <= queueList.getNumberOfEntries(); i++) {
+            WalkInBooking candidate = queueList.getEntry(i);
+            for (int j = 1; j <= roomList.getNumberOfEntries(); j++) {
+                Room r = roomList.getEntry(j);
+                if (isRoomTypeMatch(r.getRoomType(), candidate.getRequestedRoomType()) &&
+                        "Ready for Check-In".equalsIgnoreCase(r.getCurrentStatus())) {
+                    allocatableBooking = candidate;
+                    matchedRoom = r;
+                    break;
+                }
+            }
+            if (allocatableBooking != null) {
                 break;
             }
         }
 
-        if (matchedRoom == null) {
-            ui.displayMessage("No room of type '" + nextBooking.getRequestedRoomType()
-                    + "' is currently 'Ready for Check-In'.\n" +
-                    "Guest remains at the front of the queue until housekeeping releases a matching room.");
+        if (allocatableBooking == null || matchedRoom == null) {
+            ui.displayMessage("No pending guests in queue currently have matching 'Ready for Check-In' rooms.\n" +
+                    "Please wait for Housekeeping to release ready rooms.");
             ui.pressEnterToContinue();
             return;
         }
 
-        if (ui.confirmAction(
-                "Assign Room " + matchedRoom.getRoomId() + " to " + nextBooking.getGuest().getName() + "?")) {
-            // Dequeue from Queue Linear ADT
-            waitingQueue.dequeue();
+        System.out.println("\n--- CURRENT SYSTEM ROOM TABLE ---");
+        boundary.HousekeepingUI.displayRoomTable(roomList);
 
+        System.out.println("\nNext Guest Eligible for Room Allocation:");
+        System.out.println(allocatableBooking.toDetailString());
+
+        if (ui.confirmAction(
+                "Assign Room " + matchedRoom.getRoomId() + " to " + allocatableBooking.getGuest().getName() + "?")) {
             // Update entity states
             matchedRoom.setCurrentStatus("Occupied");
-            nextBooking.setAssignedRoom(matchedRoom);
-            nextBooking.setStatus("ALLOCATED");
+            allocatableBooking.setAssignedRoom(matchedRoom);
+            allocatableBooking.setStatus("ALLOCATED");
+
+            // Rebuild queue from allBookings (automatically removes allocated guest from waitingQueue)
+            rebuildWaitingQueue();
 
             // Register active stay into Front-Desk Non-Linear ADT Map (reservations.dat)
             dao.FrontDeskDAO frontDeskDAO = new dao.FrontDeskDAO();
@@ -296,9 +306,9 @@ public class WalkInBookingControl {
             }
             String confNum = String.format("2026%04d", (allBookings.getNumberOfEntries() * 19 + 1000) % 9000 + 1000);
             java.time.LocalDate inDate = java.time.LocalDate.now();
-            java.time.LocalDate outDate = inDate.plusDays(nextBooking.getNumberOfNights());
-            entity.Reservation newRes = new entity.Reservation(confNum, nextBooking.getGuest(), matchedRoom,
-                    inDate.toString(), outDate.toString(), nextBooking.getEstimatedRatePerNight(), "Checked-In");
+            java.time.LocalDate outDate = inDate.plusDays(allocatableBooking.getNumberOfNights());
+            entity.Reservation newRes = new entity.Reservation(confNum, allocatableBooking.getGuest(), matchedRoom,
+                    inDate.toString(), outDate.toString(), allocatableBooking.getEstimatedRatePerNight(), "Checked-In");
             resMap.put(confNum, newRes);
             frontDeskDAO.saveReservationsToFile(resMap);
 
@@ -314,10 +324,10 @@ public class WalkInBookingControl {
                     "  Room Assigned       : %s (%s, Floor %d)\n" +
                     "  Stay Duration       : %d night(s)\n" +
                     "  Remaining in Queue  : %d",
-                    nextBooking.getGuest().getName(), nextBooking.getBookingId(),
+                    allocatableBooking.getGuest().getName(), allocatableBooking.getBookingId(),
                     confNum,
                     matchedRoom.getRoomId(), matchedRoom.getRoomType(), matchedRoom.getFloorNumber(),
-                    nextBooking.getNumberOfNights(),
+                    allocatableBooking.getNumberOfNights(),
                     waitingQueue.size()));
         } else {
             ui.displayMessage("Allocation cancelled. Guest remains in queue.");

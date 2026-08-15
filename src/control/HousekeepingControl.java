@@ -373,6 +373,7 @@ public class HousekeepingControl {
 
     public void runHousekeepingSystem() {
         // Reload latest room data from shared rooms.dat each time subsystem is entered
+        // so changes made by Walk-In or Front-Desk (e.g., Occupied, Dirty) are reflected
         ListInterface<Room> latestRooms = dao.retrieveRoomsFromFile();
         if (latestRooms != null && !latestRooms.isEmpty()) {
             roomList = latestRooms;
@@ -462,6 +463,14 @@ public class HousekeepingControl {
             return;
         }
 
+        // Check if room is currently occupied by a guest
+        if ("Occupied".equalsIgnoreCase(room.getCurrentStatus())) {
+            ui.displayMessage("ERROR: Room " + roomId + " is currently OCCUPIED by a guest!\n"
+                    + "       Task assignment is locked until Front Desk checks out the guest (which will set status to 'Dirty').");
+            ui.pressEnterToContinue();
+            return;
+        }
+
         // Check if room already has a staff member assigned or actively working on it
         String currentStaff = room.getAssignedStaffId();
         if (currentStaff != null && !currentStaff.trim().isEmpty() && !"UNASSIGNED".equalsIgnoreCase(currentStaff.trim())) {
@@ -522,6 +531,14 @@ public class HousekeepingControl {
             return;
         }
 
+        Room room = findRoomById(roomId);
+        if (room != null && "Occupied".equalsIgnoreCase(room.getCurrentStatus())) {
+            ui.displayMessage("ERROR: Room " + roomId + " is currently OCCUPIED by a guest!\n"
+                    + "       Status updates are locked until Front Desk checks out the guest (which will set status to 'Dirty').");
+            ui.pressEnterToContinue();
+            return;
+        }
+
         HousekeepingTask task = findActiveTaskByRoomId(roomId);
         if (task == null) {
             ui.displayMessage("No active housekeeping task found for Room " + roomId);
@@ -569,7 +586,6 @@ public class HousekeepingControl {
         task.updateStatus(newStatus, updatedBy, timestamp, reason);
 
         // Update matching room status
-        Room room = findRoomById(roomId);
         if (room != null) {
             room.setCurrentStatus(newStatus);
             dao.saveRoomsToFile(roomList);
