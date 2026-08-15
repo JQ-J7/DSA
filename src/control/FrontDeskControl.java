@@ -72,25 +72,25 @@ public class FrontDeskControl {
     private void addDefaultDemoRooms() {
         Room[] constantRooms = new Room[] {
             // Floor 1: 1 Suite Room, 2 Deluxe Rooms, 2 Standard Rooms
-            new Room("R101", "Suite Room", 1, "Dirty", "ST101"),
-            new Room("R102", "Deluxe Room", 1, "Cleaning In Progress", "ST102"),
-            new Room("R103", "Deluxe Room", 1, "Inspected", "ST103"),
-            new Room("R104", "Standard Room", 1, "Ready for Check-In", "ST104"),
-            new Room("R105", "Standard Room", 1, "Ready for Check-In", "ST105"),
+            new Room("R101", "Suite Room", 1, "Dirty", "UNASSIGNED"),
+            new Room("R102", "Deluxe Room", 1, "Cleaning In Progress", "ST101"),
+            new Room("R103", "Deluxe Room", 1, "Inspected", "ST101"),
+            new Room("R104", "Standard Room", 1, "Ready for Check-In", "ST102"),
+            new Room("R105", "Standard Room", 1, "Ready for Check-In", "ST102"),
 
             // Floor 2: 1 Suite Room, 2 Deluxe Rooms, 2 Standard Rooms
-            new Room("R201", "Suite Room", 2, "Dirty", "ST201"),
-            new Room("R202", "Deluxe Room", 2, "Cleaning In Progress", "ST202"),
-            new Room("R203", "Deluxe Room", 2, "Inspected", "ST203"),
-            new Room("R204", "Standard Room", 2, "Ready for Check-In", "ST204"),
-            new Room("R205", "Standard Room", 2, "Ready for Check-In", "ST205"),
+            new Room("R201", "Suite Room", 2, "Dirty", "UNASSIGNED"),
+            new Room("R202", "Deluxe Room", 2, "Cleaning In Progress", "ST103"),
+            new Room("R203", "Deluxe Room", 2, "Inspected", "ST103"),
+            new Room("R204", "Standard Room", 2, "Ready for Check-In", "ST103"),
+            new Room("R205", "Standard Room", 2, "Ready for Check-In", "ST103"),
 
             // Floor 3: 1 Suite Room, 2 Deluxe Rooms, 2 Standard Rooms
-            new Room("R301", "Suite Room", 3, "Dirty", "ST301"),
-            new Room("R302", "Deluxe Room", 3, "Cleaning In Progress", "ST302"),
-            new Room("R303", "Deluxe Room", 3, "Inspected", "ST303"),
-            new Room("R304", "Standard Room", 3, "Ready for Check-In", "ST304"),
-            new Room("R305", "Standard Room", 3, "Ready for Check-In", "ST305")
+            new Room("R301", "Suite Room", 3, "Dirty", "ST104"),
+            new Room("R302", "Deluxe Room", 3, "Cleaning In Progress", "ST104"),
+            new Room("R303", "Deluxe Room", 3, "Inspected", "ST104"),
+            new Room("R304", "Standard Room", 3, "Ready for Check-In", "ST104"),
+            new Room("R305", "Standard Room", 3, "Ready for Check-In", "ST104")
         };
         for (Room r : constantRooms) {
             Room existing = findRoomById(r.getRoomId());
@@ -118,10 +118,10 @@ public class FrontDeskControl {
         Room r301 = findRoomById("R301");
         Room r104 = findRoomById("R104");
 
-        if (r101 == null) r101 = new Room("R101", "Suite Room", 1, "Occupied", "ST101");
-        if (r201 == null) r201 = new Room("R201", "Suite Room", 2, "Occupied", "ST201");
-        if (r301 == null) r301 = new Room("R301", "Suite Room", 3, "Occupied", "ST301");
-        if (r104 == null) r104 = new Room("R104", "Standard Room", 1, "Ready for Check-In", "ST104");
+        if (r101 == null) r101 = new Room("R101", "Suite Room", 1, "Occupied", "UNASSIGNED");
+        if (r201 == null) r201 = new Room("R201", "Suite Room", 2, "Occupied", "UNASSIGNED");
+        if (r301 == null) r301 = new Room("R301", "Suite Room", 3, "Occupied", "ST104");
+        if (r104 == null) r104 = new Room("R104", "Standard Room", 1, "Ready for Check-In", "ST102");
 
         // --- Guest Entity Objects ---
         Guest g1 = new Guest("990101-14-5566", "Ali Bin Abu",    "012-3456789");
