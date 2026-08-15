@@ -276,37 +276,149 @@ public class FrontDeskControl {
     }
 
     /**
-     * Feature 3: Room Availability Query.
-     * Filters the shared 15 hotel rooms for available rooms of the requested type.
+     * Feature 3: Real-Time Room Availability & Inventory Query.
+     * Instantly queries live room statuses, cross-references active occupants from HashMap,
+     * and produces a detailed availability breakdown by tier and floor.
      */
     private void checkRoomAvailability() {
-        ui.displayHeader("ROOM AVAILABILITY QUERY");
-        String type = ui.inputRoomType();
-        if (type.isEmpty()) {
+        ui.displayHeader("REAL-TIME ROOM INVENTORY & AVAILABILITY QUERY");
+
+        // Reload latest room data and reservations from shared binary files
+        ListInterface<Room> latestRooms = housekeepingDAO.retrieveRoomsFromFile();
+        if (latestRooms != null && !latestRooms.isEmpty()) {
+            roomList = latestRooms;
+        }
+        MapInterface<String, Reservation> latestRes = dao.retrieveReservationsFromFile();
+        if (latestRes != null && !latestRes.isEmpty()) {
+            reservationsMap = latestRes;
+        }
+
+        String filterType = ui.inputRoomType();
+        if (filterType.isEmpty()) {
             ui.displayMessage("Operation cancelled.");
             return;
         }
 
-        System.out.println();
-        System.out.printf("%-8s | %-16s | %-6s | %-22s%n",
-                "Room ID", "Room Type", "Floor", "Status");
-        ui.displayFooter();
+        boolean showAll = "ALL".equalsIgnoreCase(filterType);
 
-        int availableCount = 0;
+        System.out.println("\n==========================================================================================================================");
+        System.out.printf("  %-8s | %-16s | %-6s | %-12s | %-22s | %-16s | %-26s%n",
+                "Room ID", "Room Type", "Floor", "Nightly Rate", "System Status", "Availability", "Occupant / Pipeline Note");
+        System.out.println("--------------------------------------------------------------------------------------------------------------------------");
+
+        int totalCount = 0;
+        int readyCount = 0;
+        int occupiedCount = 0;
+        int dirtyCount = 0;
+        int cleaningCount = 0;
+        int inspectedCount = 0;
+
+        int[] readyPerFloor = new int[4]; // floors 1 to 3
+
         for (int i = 1; i <= roomList.getNumberOfEntries(); i++) {
             Room r = roomList.getEntry(i);
-            if (r.getRoomType().equalsIgnoreCase(type) || 
-                r.getRoomType().toLowerCase().contains(type.toLowerCase())) {
-                System.out.printf("%-8s | %-16s | %-6d | %-22s%n",
-                        r.getRoomId(), r.getRoomType(), r.getFloorNumber(), r.getCurrentStatus());
-                if (r.getCurrentStatus().equalsIgnoreCase("Ready for Check-In")) {
-                    availableCount++;
+            boolean match = showAll || r.getRoomType().equalsIgnoreCase(filterType) ||
+                    r.getRoomType().toLowerCase().contains(filterType.toLowerCase());
+
+            if (!match) continue;
+
+            totalCount++;
+            int floor = r.getFloorNumber();
+            String status = r.getCurrentStatus();
+            double rate = getRateForRoomType(r.getRoomType());
+
+            String availLabel;
+            String occupantNote = "-";
+
+            if ("Ready for Check-In".equalsIgnoreCase(status)) {
+                availLabel = "[AVAILABLE NOW]";
+                occupantNote = "Ready for Immediate Check-In";
+                readyCount++;
+                if (floor >= 1 && floor <= 3) readyPerFloor[floor]++;
+            } else if ("Occupied".equalsIgnoreCase(status)) {
+                availLabel = "[OCCUPIED]";
+                occupiedCount++;
+                Reservation activeRes = findReservationByRoomId(r.getRoomId());
+                if (activeRes != null) {
+                    occupantNote = activeRes.getGuest().getName() + " (" + activeRes.getConfirmationNumber() + ")";
+                } else {
+                    occupantNote = "In-House Guest";
+                }
+            } else if ("Cleaning In Progress".equalsIgnoreCase(status)) {
+                availLabel = "[CLEANING]";
+                cleaningCount++;
+                occupantNote = "Cleaning by " + r.getAssignedStaffId();
+            } else if ("Inspected".equalsIgnoreCase(status)) {
+                availLabel = "[INSPECTED]";
+                inspectedCount++;
+                occupantNote = "Awaiting Final Release";
+            } else if ("Dirty".equalsIgnoreCase(status)) {
+                availLabel = "[DIRTY]";
+                dirtyCount++;
+                occupantNote = "Pending Housekeeping Clean";
+            } else {
+                availLabel = "[" + status.toUpperCase() + "]";
+                occupantNote = "Status: " + status;
+            }
+
+            System.out.printf("  %-8s | %-16s | Floor %-1d | RM %-9.2f | %-22s | %-16s | %-26s%n",
+                    r.getRoomId(), r.getRoomType(), floor, rate, status, availLabel, occupantNote);
+        }
+
+        System.out.println("==========================================================================================================================");
+
+        // Summary Breakdown Card
+        String categoryName = showAll ? "All Room Types (Full Resort Overview)" : filterType;
+        double availPct = totalCount > 0 ? (readyCount * 100.0 / totalCount) : 0.0;
+        double occPct   = totalCount > 0 ? (occupiedCount * 100.0 / totalCount) : 0.0;
+        int pipelineTotal = dirtyCount + cleaningCount + inspectedCount;
+
+        System.out.println("\n  ROOM AVAILABILITY & INVENTORY SUMMARY:");
+        System.out.println("  -----------------------------------------------------------------");
+        System.out.printf("  Target Category       : %s%n", categoryName);
+        System.out.printf("  Total Rooms in Scope  : %d room(s)%n", totalCount);
+        System.out.printf("  • Ready for Check-In  : %d room(s)  [ %.1f%% AVAILABLE ]%n", readyCount, availPct);
+        System.out.printf("  • Occupied by Guests  : %d room(s)  [ %.1f%% OCCUPIED ]%n", occupiedCount, occPct);
+        System.out.printf("  • Housekeeping Pipeline : %d room(s)  [ %d Dirty | %d Cleaning In Progress | %d Inspected ]%n",
+                pipelineTotal, dirtyCount, cleaningCount, inspectedCount);
+        System.out.println("  -----------------------------------------------------------------");
+
+        System.out.println("  Floor-by-Floor Ready Availability:");
+        System.out.printf("  - Floor 1 : %d ready room(s)%n", readyPerFloor[1]);
+        System.out.printf("  - Floor 2 : %d ready room(s)%n", readyPerFloor[2]);
+        System.out.printf("  - Floor 3 : %d ready room(s)%n", readyPerFloor[3]);
+
+        System.out.println("\n  Front-Desk Agent Status:");
+        if (readyCount > 0) {
+            System.out.printf("  [OK] %d room(s) can be assigned IMMEDIATELY to incoming walk-in guests.%n", readyCount);
+        } else if (inspectedCount > 0) {
+            System.out.printf("  [!] 0 rooms ready now, but %d inspected room(s) will be available shortly.%n", inspectedCount);
+        } else {
+            System.out.println("  [!] No rooms currently ready. Incoming walk-in guests must join the waiting queue.");
+        }
+
+        ui.pressEnterToContinue();
+    }
+
+    private double getRateForRoomType(String roomType) {
+        if (roomType == null) return 200.00;
+        String t = roomType.toLowerCase();
+        if (t.contains("suite")) return 600.00;
+        if (t.contains("deluxe")) return 350.00;
+        return 200.00;
+    }
+
+    private Reservation findReservationByRoomId(String roomId) {
+        if (roomId == null) return null;
+        for (Object obj : reservationsMap.values()) {
+            Reservation r = (Reservation) obj;
+            if (r != null && r.getRoom() != null && roomId.equalsIgnoreCase(r.getRoom().getRoomId())) {
+                if ("Checked-In".equalsIgnoreCase(r.getStatus()) || "Confirmed".equalsIgnoreCase(r.getStatus())) {
+                    return r;
                 }
             }
         }
-        ui.displayFooter();
-        ui.displayMessage(availableCount + " room(s) of type [" + type + "] are available for Check-In.");
-        ui.pressEnterToContinue();
+        return null;
     }
 
     /**
