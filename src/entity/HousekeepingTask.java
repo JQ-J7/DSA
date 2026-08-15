@@ -62,8 +62,16 @@ public class HousekeepingTask implements Serializable {
         return currentStatus;
     }
 
+    public void setCurrentStatus(String currentStatus) {
+        this.currentStatus = currentStatus;
+    }
+
     public String getLastUpdated() {
         return lastUpdated;
+    }
+
+    public void setLastUpdated(String lastUpdated) {
+        this.lastUpdated = lastUpdated;
     }
 
     public StackInterface<TaskStatusHistory> getHistoryStack() {
@@ -74,8 +82,14 @@ public class HousekeepingTask implements Serializable {
         return rollbackCount;
     }
 
+    public void incrementRollbackCount() {
+        this.rollbackCount++;
+    }
+
     /**
      * Updates the task status sequentially and logs the status change onto the stack.
+     * Enforces Rule 2 (Tripartite Data Consistency - CLO2/CLO3):
+     * Task.currentStatus == historyStack.peek().getNewStatus()
      */
     public boolean updateStatus(String newStatus, String updatedBy, String timestamp, String reason) {
         TaskStatusHistory newLog = new TaskStatusHistory(
@@ -94,27 +108,28 @@ public class HousekeepingTask implements Serializable {
     }
 
     /**
-     * Instantly rolls back the current task status to the previous state using Stack pop.
+     * Instantly rolls back current task status to previous state using Stack pop (LIFO).
+     * Enforces Rule 2 (Tripartite Consistency) and Rule 3 (Traceable Rollback Counter - CLO2/CLO3).
      */
     public TaskStatusHistory rollbackStatus(String updatedBy, String timestamp, String reason) {
         if (historyStack.isEmpty()) {
             return null;
         }
 
-        // Pop current status log
+        // LIFO Stack ADT Pop
         TaskStatusHistory poppedLog = historyStack.pop();
 
         if (historyStack.isEmpty()) {
-            // Push it back if it was the only record
+            // Push it back if it was the only record (Initial Log Protection)
             historyStack.push(poppedLog);
             return null;
         }
 
-        // Previous log is now at top of stack
+        // Previous log is now at top of stack (Rule 2 State Synchrony)
         TaskStatusHistory previousLog = historyStack.peek();
         this.currentStatus = previousLog.getNewStatus();
         this.lastUpdated = timestamp;
-        this.rollbackCount++;
+        this.rollbackCount++; // Rule 3: Traceable Rollback Audit Increment
 
         // Return the popped state for reporting/auditing
         return poppedLog;

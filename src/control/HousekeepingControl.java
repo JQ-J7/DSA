@@ -102,6 +102,55 @@ public class HousekeepingControl {
                 tasksChanged = true;
             }
         }
+
+        // Rule 1 & Rule 2 Enforcement: Auto-Archive older tasks and sync active task with room status
+        String syncTimestamp = LocalDateTime.now().format(dtf);
+        for (int i = 1; i <= cleanRoomList.getNumberOfEntries(); i++) {
+            Room r = cleanRoomList.getEntry(i);
+            HousekeepingTask activeTask = null;
+            // Scan backwards: latest non-archived task is active, all others for this room become Archived
+            for (int j = cleanTaskList.getNumberOfEntries(); j >= 1; j--) {
+                HousekeepingTask t = cleanTaskList.getEntry(j);
+                if (t.getRoomId().equalsIgnoreCase(r.getRoomId())) {
+                    if (activeTask == null && !"Archived".equalsIgnoreCase(t.getCurrentStatus())) {
+                        activeTask = t;
+                    } else if (activeTask != null && !"Archived".equalsIgnoreCase(t.getCurrentStatus())) {
+                        // Older task for same room: Auto-Archive (Rule 1)
+                        t.setCurrentStatus("Archived");
+                        tasksChanged = true;
+                    }
+                }
+            }
+
+            if (activeTask != null) {
+                // Rule 2: Tripartite Data Consistency (CLO2/CLO3)
+                if (!activeTask.getCurrentStatus().equalsIgnoreCase(r.getCurrentStatus())) {
+                    if ("Occupied".equalsIgnoreCase(r.getCurrentStatus())) {
+                        activeTask.setCurrentStatus("Occupied");
+                        activeTask.setLastUpdated(syncTimestamp);
+                        String prevSt = (activeTask.getHistoryStack().isEmpty()) ? "Ready for Check-In" : activeTask.getHistoryStack().peek().getNewStatus();
+                        TaskStatusHistory occLog = new TaskStatusHistory(
+                                "LOG-" + System.currentTimeMillis() % 10000,
+                                prevSt,
+                                "Occupied",
+                                (r.getAssignedStaffId() != null ? r.getAssignedStaffId() : "FRONT_DESK"),
+                                syncTimestamp,
+                                "Guest checked in by Front Desk",
+                                false
+                        );
+                        activeTask.getHistoryStack().push(occLog);
+                    } else {
+                        activeTask.setCurrentStatus(r.getCurrentStatus());
+                    }
+                    tasksChanged = true;
+                }
+                if (r.getAssignedStaffId() != null && !r.getAssignedStaffId().trim().isEmpty() && !"UNASSIGNED".equalsIgnoreCase(r.getAssignedStaffId()) && !r.getAssignedStaffId().equalsIgnoreCase(activeTask.getStaffId())) {
+                    activeTask.setStaffId(r.getAssignedStaffId());
+                    tasksChanged = true;
+                }
+            }
+        }
+
         if (tasksChanged) {
             taskList = cleanTaskList;
             dao.saveTasksToFile(taskList);
@@ -503,19 +552,36 @@ public class HousekeepingControl {
             return;
         }
 
+        String timestamp = LocalDateTime.now().format(dtf);
+
+        // =========================================================================
+        // RULE 1: Single Active Task Enforcement (Auto-Archiving - CLO2/CLO3 Standard)
+        // A room can have ONLY ONE active (non-Archived) task at any given time.
+        // =========================================================================
+        for (int i = 1; i <= taskList.getNumberOfEntries(); i++) {
+            HousekeepingTask existingTask = taskList.getEntry(i);
+            if (existingTask.getRoomId().equalsIgnoreCase(roomId) && !"Archived".equalsIgnoreCase(existingTask.getCurrentStatus())) {
+                existingTask.setCurrentStatus("Archived");
+                existingTask.setLastUpdated(timestamp);
+            }
+        }
+
+        // =========================================================================
+        // RULE 2: Tripartite State Synchronization ("Three-in-One Consistency")
+        // Task.currentStatus ('Dirty') == Room.currentStatus ('Dirty') == Stack.peek() ('Dirty')
+        // =========================================================================
         room.setAssignedStaffId(staffId);
         room.setCurrentStatus("Dirty");
 
         String taskId = "TSK-" + (1000 + taskList.getNumberOfEntries() + 1);
-        String timestamp = LocalDateTime.now().format(dtf);
-
         HousekeepingTask task = new HousekeepingTask(taskId, roomId, staffId, "Dirty", timestamp);
         taskList.add(task);
 
+        // Immediate Data Persistence
         dao.saveRoomsToFile(roomList);
         dao.saveTasksToFile(taskList);
 
-        ui.displayMessage("Successfully created task " + taskId + " for Room " + roomId + " assigned to Staff " + staffId);
+        ui.displayMessage("Successfully created active task " + taskId + " for Room " + roomId + " assigned to Staff " + staffId);
         ui.pressEnterToContinue();
     }
 
@@ -532,54 +598,66 @@ public class HousekeepingControl {
         }
 
         Room room = findRoomById(roomId);
-        if (room != null && "Occupied".equalsIgnoreCase(room.getCurrentStatus())) {
+        if (room == null) {
+            ui.displayMessage("ERROR: Room " + roomId + " is unknown / not registered in the system!");
+            ui.pressEnterToContinue();
+            return;
+        }
+
+        if ("Occupied".equalsIgnoreCase(room.getCurrentStatus())) {
             ui.displayMessage("ERROR: Room " + roomId + " is currently OCCUPIED by a guest!\n"
                     + "       Status updates are locked until Front Desk checks out the guest (which will set status to 'Dirty').");
             ui.pressEnterToContinue();
             return;
         }
 
-        HousekeepingTask task = findActiveTaskByRoomId(roomId);
-        if (task == null) {
-            ui.displayMessage("No active housekeeping task found for Room " + roomId);
+        // Validation: Ensure room has an assigned staff member before updating cleaning status
+        String assignedStaff = room.getAssignedStaffId();
+        if (assignedStaff == null || assignedStaff.trim().isEmpty() || "UNASSIGNED".equalsIgnoreCase(assignedStaff.trim())) {
+            ui.displayMessage("ERROR: Cannot update cleaning status for Room " + roomId + "!\n"
+                    + "       No housekeeping staff member is currently assigned to this room.\n"
+                    + "       Please assign a staff member first using Option [2] (Assign New Cleaning Task to Staff).");
             ui.pressEnterToContinue();
             return;
         }
 
-        String currentStatus = task.getCurrentStatus();
-        int choice = ui.selectNextStatusChoice(currentStatus);
-        if (choice == 0) {
-            ui.displayMessage("Status update operation cancelled.");
-            return;
+        HousekeepingTask task = findActiveTaskByRoomId(roomId);
+        String currentStatus = room.getCurrentStatus();
+
+        // If task is missing or out-of-sync with room's Dirty/new cycle, initialize a fresh task cycle
+        if (task == null || (!task.getCurrentStatus().equalsIgnoreCase(currentStatus) && "Dirty".equalsIgnoreCase(currentStatus))) {
+            String taskId = "TSK-" + (1000 + taskList.getNumberOfEntries() + 1);
+            String timestamp = LocalDateTime.now().format(dtf);
+            task = new HousekeepingTask(taskId, roomId, assignedStaff, currentStatus, timestamp);
+            taskList.add(task);
+            dao.saveTasksToFile(taskList);
+        } else {
+            task.setStaffId(assignedStaff);
         }
+
         String newStatus;
+        String reason;
 
-        switch (choice) {
-            case 1:
-                newStatus = "Cleaning In Progress";
-                break;
-            case 2:
-                newStatus = "Inspected";
-                break;
-            case 3:
-                newStatus = "Ready for Check-In";
-                break;
-            default:
-                ui.displayMessage("Invalid status choice selection.");
-                return;
-        }
-
-        if (currentStatus.equalsIgnoreCase(newStatus)) {
-            ui.displayMessage("Room " + roomId + " is already in status '" + currentStatus + "'. No changes made.");
+        if ("Dirty".equalsIgnoreCase(currentStatus)) {
+            newStatus = "Cleaning In Progress";
+            reason = "Started room cleaning";
+        } else if ("Cleaning In Progress".equalsIgnoreCase(currentStatus)) {
+            newStatus = "Inspected";
+            reason = "Completed cleaning, submitted for inspection";
+        } else if ("Inspected".equalsIgnoreCase(currentStatus)) {
+            newStatus = "Ready for Check-In";
+            reason = "Inspection approved, ready for guest check-in";
+        } else if ("Ready for Check-In".equalsIgnoreCase(currentStatus)) {
+            ui.displayMessage("Room " + roomId + " is already 'Ready for Check-In' (cleaning workflow is fully completed).");
+            ui.pressEnterToContinue();
+            return;
+        } else {
+            ui.displayMessage("Cannot auto-advance: Room " + roomId + " has unrecognized status '" + currentStatus + "'.");
             ui.pressEnterToContinue();
             return;
         }
 
         String updatedBy = (task.getStaffId() == null || task.getStaffId().trim().isEmpty()) ? "UNASSIGNED" : task.getStaffId();
-        String reason = ui.inputReason();
-        if (reason.isEmpty()) {
-            reason = "Standard status progression";
-        }
         String timestamp = LocalDateTime.now().format(dtf);
 
         // Update task state history stack
@@ -592,7 +670,7 @@ public class HousekeepingControl {
         }
 
         dao.saveTasksToFile(taskList);
-        ui.displayMessage("SUCCESS: Room " + roomId + " status updated from '" + currentStatus + "' -> '" + newStatus + "'");
+        ui.displayMessage("SUCCESS: Room " + roomId + " status auto-updated from '" + currentStatus + "' -> '" + newStatus + "'");
         ui.pressEnterToContinue();
     }
 
@@ -602,78 +680,178 @@ public class HousekeepingControl {
         displayRoomTaskTable();
         System.out.println();
 
-        String roomId = ui.inputRoomId();
-        if (roomId.isEmpty()) {
+        String inputId = ui.inputRoomId();
+        if (inputId.isEmpty()) {
             ui.displayMessage("Operation cancelled.");
             return;
         }
 
-        HousekeepingTask task = findActiveTaskByRoomId(roomId);
-        if (task == null) {
-            ui.displayMessage("No active task found for Room " + roomId);
+        // Support lookup by Room ID or Task ID
+        Room room = findRoomById(inputId);
+        HousekeepingTask task = null;
+        if (room != null) {
+            task = findActiveTaskByRoomId(room.getRoomId());
+        } else {
+            // Check if input was a Task ID
+            for (int i = 1; i <= taskList.getNumberOfEntries(); i++) {
+                HousekeepingTask t = taskList.getEntry(i);
+                if (t.getTaskId().equalsIgnoreCase(inputId)) {
+                    task = t;
+                    room = findRoomById(t.getRoomId());
+                    break;
+                }
+            }
+        }
+
+        if (room == null) {
+            ui.displayMessage("ERROR: Room / Task ID '" + inputId + "' is unknown / not registered in the system!");
             ui.pressEnterToContinue();
             return;
         }
 
-        String currentStatus = task.getCurrentStatus();
-        if (task.getHistoryStack().isEmpty()) {
+        if ("Occupied".equalsIgnoreCase(room.getCurrentStatus())) {
+            ui.displayMessage("ERROR: Room " + room.getRoomId() + " is currently OCCUPIED by a guest!\n"
+                    + "       Rollback operations are locked while the room is occupied.");
+            ui.pressEnterToContinue();
+            return;
+        }
+
+        if (task == null) {
+            ui.displayMessage("No active housekeeping task found for Room " + room.getRoomId());
+            ui.pressEnterToContinue();
+            return;
+        }
+
+        StackInterface<TaskStatusHistory> historyStack = task.getHistoryStack();
+        if (historyStack == null || historyStack.isEmpty()) {
             ui.displayMessage("Cannot rollback: Task status stack history is empty!");
             ui.pressEnterToContinue();
             return;
         }
 
-        // Check top log on stack for preview
-        TaskStatusHistory topLog = task.getHistoryStack().peek();
-        String previewPreviousStatus = topLog.getPreviousStatus();
-        if ("N/A".equalsIgnoreCase(previewPreviousStatus)) {
+        // Initial Log Protection: Cannot undo initial creation record
+        TaskStatusHistory topLog = historyStack.peek();
+        String previousStatus = topLog.getPreviousStatus();
+        if (previousStatus == null || "N/A".equalsIgnoreCase(previousStatus) || historyStack.getNumberOfEntries() <= 1) {
             ui.displayMessage("Cannot rollback: Initial task creation status cannot be undone!");
             ui.pressEnterToContinue();
             return;
         }
 
-        System.out.println("\n--------------------------------------------------------------------------");
-        System.out.println(" ROLLBACK PREVIEW FOR ROOM " + roomId);
-        System.out.println(" Current Status : " + currentStatus);
-        System.out.println(" Target Status  : " + previewPreviousStatus + " (Status to Revert Back To)");
-        System.out.println("--------------------------------------------------------------------------");
-
-        if (!ui.confirmAction("Rollback Room " + roomId + " status back to '" + previewPreviousStatus + "'")) {
-            ui.displayMessage("Rollback action cancelled by user.");
+        // Sub-menu for Rollback Scenario selection
+        int scenarioChoice = ui.selectRollbackScenario();
+        if (scenarioChoice == 0) {
+            ui.displayMessage("Rollback operation cancelled.");
             return;
         }
 
-        String updatedBy = ui.inputStaffId();
-        if (updatedBy.isEmpty()) {
-            updatedBy = "SUPERVISOR";
+        String currentStatus = room.getCurrentStatus();
+        String roomId = room.getRoomId();
+
+        switch (scenarioChoice) {
+            case 1:
+                // =========================================================================
+                // Scenario 1: Late Check-Out Rollback (Revert Room to 'Occupied')
+                // Business Context: Cleaning started prematurely, guest requested late check-out
+                // =========================================================================
+                System.out.println("\n--------------------------------------------------------------------------");
+                System.out.println(" LATE CHECK-OUT ROLLBACK PREVIEW FOR ROOM " + roomId);
+                System.out.println(" Current Status : " + currentStatus);
+                System.out.println(" Target Status  : Occupied (Guest Late Check-Out Requested)");
+                System.out.println(" Assigned Staff : Will be reset to UNASSIGNED");
+                System.out.println("--------------------------------------------------------------------------");
+
+                if (!ui.confirmAction("Rollback Room " + roomId + " status to 'Occupied' for Late Check-Out")) {
+                    ui.displayMessage("Rollback action cancelled by user.");
+                    return;
+                }
+
+                // LIFO Stack ADT Execution: Pop the premature cleaning transition log
+                historyStack.pop();
+
+                String timestamp1 = LocalDateTime.now().format(dtf);
+                String rollbackReason = "Late Check-Out requested by guest";
+                String staffRecorder = (task.getStaffId() == null || task.getStaffId().trim().isEmpty() || "UNASSIGNED".equalsIgnoreCase(task.getStaffId())) ? "SUPERVISOR" : task.getStaffId();
+
+                // Push new rollback state record onto the Stack
+                TaskStatusHistory lateCheckoutLog = new TaskStatusHistory(
+                        "LOG-" + System.currentTimeMillis() % 10000,
+                        currentStatus,
+                        "Occupied",
+                        staffRecorder,
+                        timestamp1,
+                        rollbackReason,
+                        true
+                );
+                historyStack.push(lateCheckoutLog);
+
+                // State Updates
+                room.setCurrentStatus("Occupied");
+                room.setAssignedStaffId("UNASSIGNED");
+                task.setCurrentStatus("Occupied");
+                task.setStaffId("UNASSIGNED");
+                task.setLastUpdated(timestamp1);
+                task.incrementRollbackCount();
+
+                // Data Persistence
+                dao.saveRoomsToFile(roomList);
+                dao.saveTasksToFile(taskList);
+
+                ui.displayMessage("LATE CHECK-OUT ROLLBACK SUCCESSFUL! Room " + roomId 
+                        + " status reverted to 'Occupied' and staff unassigned.");
+                ui.pressEnterToContinue();
+                break;
+
+            case 2:
+                // =========================================================================
+                // Scenario 2: Undo Status Misclick (Revert to Immediate Previous Log)
+                // Business Context: Supervisor / staff accidentally advanced status by mistake
+                // =========================================================================
+                String targetPreviousStatus = topLog.getPreviousStatus();
+
+                System.out.println("\n--------------------------------------------------------------------------");
+                System.out.println(" MISCLICK CORRECTION PREVIEW FOR ROOM " + roomId);
+                System.out.println(" Current Status : " + currentStatus);
+                System.out.println(" Target Status  : " + targetPreviousStatus + " (Immediate Previous State)");
+                System.out.println("--------------------------------------------------------------------------");
+
+                if (!ui.confirmAction("Revert Room " + roomId + " status back to '" + targetPreviousStatus + "'")) {
+                    ui.displayMessage("Rollback action cancelled by user.");
+                    return;
+                }
+
+                String reason = ui.inputCorrectionReason();
+                if (reason.isEmpty()) {
+                    reason = "Supervisor status input correction";
+                }
+
+                // LIFO Stack ADT Execution: Pop the misclicked status transition log
+                historyStack.pop();
+
+                // The previous log state is now at the top of the Stack ADT
+                TaskStatusHistory previousLog = historyStack.peek();
+                String revertedStatus = (previousLog != null) ? previousLog.getNewStatus() : targetPreviousStatus;
+                String timestamp2 = LocalDateTime.now().format(dtf);
+
+                // State Updates
+                task.setCurrentStatus(revertedStatus);
+                task.setLastUpdated(timestamp2);
+                task.incrementRollbackCount();
+                room.setCurrentStatus(revertedStatus);
+
+                // Data Persistence
+                dao.saveRoomsToFile(roomList);
+                dao.saveTasksToFile(taskList);
+
+                ui.displayMessage("STATUS CORRECTION SUCCESSFUL! Room " + roomId 
+                        + " status reverted from '" + currentStatus + "' back to '" + revertedStatus + "'");
+                ui.pressEnterToContinue();
+                break;
+
+            default:
+                ui.displayMessage("Invalid rollback scenario selection.");
+                break;
         }
-        String reason = ui.inputReason();
-        if (reason.isEmpty()) {
-            reason = "Supervisor override / Late check-out rollback";
-        }
-        String timestamp = LocalDateTime.now().format(dtf);
-
-        TaskStatusHistory poppedLog = task.rollbackStatus(updatedBy, timestamp, reason);
-
-        if (poppedLog == null) {
-            ui.displayMessage("Cannot rollback: Initial task creation status cannot be undone!");
-            ui.pressEnterToContinue();
-            return;
-        }
-
-        String rolledBackToStatus = task.getCurrentStatus();
-
-        // Update room entity status
-        Room room = findRoomById(roomId);
-        if (room != null) {
-            room.setCurrentStatus(rolledBackToStatus);
-            room.setAssignedStaffId(updatedBy);
-            dao.saveRoomsToFile(roomList);
-        }
-
-        dao.saveTasksToFile(taskList);
-        ui.displayMessage("ROLLBACK SUCCESSFUL! Room " + roomId + " status reverted from '" 
-                + currentStatus + "' back to '" + rolledBackToStatus + "'");
-        ui.pressEnterToContinue();
     }
 
     public void searchRoomOrTask() {
@@ -685,28 +863,148 @@ public class HousekeepingControl {
             return;
         }
 
+        // Reload latest room data and task data from shared DAO
+        ListInterface<Room> latestRooms = dao.retrieveRoomsFromFile();
+        if (latestRooms != null && !latestRooms.isEmpty()) {
+            roomList = latestRooms;
+        }
+        ListInterface<HousekeepingTask> latestTasks = dao.retrieveTasksFromFile();
+        if (latestTasks != null && !latestTasks.isEmpty()) {
+            taskList = latestTasks;
+        }
+
+        // Rule 1 & Rule 2 Enforcement: Auto-Archive older tasks and sync active task with room status
+        String syncTimestamp = LocalDateTime.now().format(dtf);
+        boolean syncChanged = false;
+        for (int i = 1; i <= roomList.getNumberOfEntries(); i++) {
+            Room r = roomList.getEntry(i);
+            HousekeepingTask activeTask = null;
+            // Scan backwards: latest non-archived task is active, all others for this room become Archived
+            for (int j = taskList.getNumberOfEntries(); j >= 1; j--) {
+                HousekeepingTask t = taskList.getEntry(j);
+                if (t.getRoomId().equalsIgnoreCase(r.getRoomId())) {
+                    if (activeTask == null && !"Archived".equalsIgnoreCase(t.getCurrentStatus())) {
+                        activeTask = t;
+                    } else if (activeTask != null && !"Archived".equalsIgnoreCase(t.getCurrentStatus())) {
+                        // Older task for same room: Auto-Archive (Rule 1)
+                        t.setCurrentStatus("Archived");
+                        syncChanged = true;
+                    }
+                }
+            }
+
+            if (activeTask != null) {
+                // Rule 2: Tripartite Data Consistency (CLO2/CLO3)
+                if (!activeTask.getCurrentStatus().equalsIgnoreCase(r.getCurrentStatus())) {
+                    if ("Occupied".equalsIgnoreCase(r.getCurrentStatus())) {
+                        activeTask.setCurrentStatus("Occupied");
+                        activeTask.setLastUpdated(syncTimestamp);
+                        String prevSt = (activeTask.getHistoryStack().isEmpty()) ? "Ready for Check-In" : activeTask.getHistoryStack().peek().getNewStatus();
+                        TaskStatusHistory occLog = new TaskStatusHistory(
+                                "LOG-" + System.currentTimeMillis() % 10000,
+                                prevSt,
+                                "Occupied",
+                                (r.getAssignedStaffId() != null ? r.getAssignedStaffId() : "FRONT_DESK"),
+                                syncTimestamp,
+                                "Guest checked in by Front Desk",
+                                false
+                        );
+                        activeTask.getHistoryStack().push(occLog);
+                    } else {
+                        activeTask.setCurrentStatus(r.getCurrentStatus());
+                    }
+                    syncChanged = true;
+                }
+                if (r.getAssignedStaffId() != null && !r.getAssignedStaffId().trim().isEmpty() && !"UNASSIGNED".equalsIgnoreCase(r.getAssignedStaffId()) && !r.getAssignedStaffId().equalsIgnoreCase(activeTask.getStaffId())) {
+                    activeTask.setStaffId(r.getAssignedStaffId());
+                    syncChanged = true;
+                }
+            }
+        }
+        if (syncChanged) {
+            dao.saveTasksToFile(taskList);
+        }
+
         ui.displayHeader("SEARCH RESULTS FOR: " + query);
-        boolean found = false;
 
-        System.out.println(String.format("%-10s | %-10s | %-12s | %-24s | %-20s", 
-                "Task ID", "Room ID", "Staff ID", "Current Status", "Last Updated"));
-        System.out.println("--------------------------------------------------------------------------------------------------");
-
-        // Custom Linear Search Algorithm
-        for (int i = 1; i <= taskList.getNumberOfEntries(); i++) {
-            HousekeepingTask task = taskList.getEntry(i);
-            if (task.getRoomId().equalsIgnoreCase(query) || task.getStaffId().equalsIgnoreCase(query)) {
-                System.out.println(String.format("%-10s | %-10s | %-12s | %-24s | %-20s",
-                        task.getTaskId(), task.getRoomId(), task.getStaffId(), task.getCurrentStatus(), task.getLastUpdated()));
-                found = true;
+        // 1. Search Matching Hotel Rooms (Linear Search ADT)
+        ListInterface<Room> matchedRooms = new ArrayList<>();
+        for (int i = 1; i <= roomList.getNumberOfEntries(); i++) {
+            Room r = roomList.getEntry(i);
+            if (r.getRoomId().equalsIgnoreCase(query) || 
+                (r.getAssignedStaffId() != null && r.getAssignedStaffId().equalsIgnoreCase(query)) || 
+                r.getCurrentStatus().equalsIgnoreCase(query) ||
+                r.getRoomType().toLowerCase().contains(query.toLowerCase()) ||
+                String.valueOf(r.getFloorNumber()).equals(query)) {
+                matchedRooms.add(r);
             }
         }
 
-        if (!found) {
-            ui.displayMessage("No tasks matching query '" + query + "' were found.");
-        } else {
-            ui.displayFooter();
+        // 2. Search Matching Housekeeping Tasks (Linear Search ADT)
+        ListInterface<HousekeepingTask> matchedTasks = new ArrayList<>();
+        for (int i = 1; i <= taskList.getNumberOfEntries(); i++) {
+            HousekeepingTask task = taskList.getEntry(i);
+            if (task.getTaskId().equalsIgnoreCase(query) || 
+                task.getRoomId().equalsIgnoreCase(query) || 
+                (task.getStaffId() != null && task.getStaffId().equalsIgnoreCase(query)) ||
+                task.getCurrentStatus().equalsIgnoreCase(query)) {
+                matchedTasks.add(task);
+            }
         }
+
+        if (matchedRooms.isEmpty() && matchedTasks.isEmpty()) {
+            ui.displayMessage("No hotel rooms or housekeeping tasks matching query '" + query + "' were found.");
+            ui.pressEnterToContinue();
+            return;
+        }
+
+        // Display Matched Rooms Table
+        if (!matchedRooms.isEmpty()) {
+            System.out.println("--- [ 1. LIVE HOTEL ROOM STATUS ] ---");
+            System.out.println(String.format("%-6s | %-10s | %-12s | %-24s | %-18s | %-8s", 
+                    "No.", "Room ID", "Staff ID", "Current Status", "Room Type", "Floor"));
+            System.out.println("--------------------------------------------------------------------------------------------------");
+            for (int i = 1; i <= matchedRooms.getNumberOfEntries(); i++) {
+                Room r = matchedRooms.getEntry(i);
+                String staff = (r.getAssignedStaffId() == null || r.getAssignedStaffId().trim().isEmpty()) ? "UNASSIGNED" : r.getAssignedStaffId();
+                System.out.println(String.format("%-6d | %-10s | %-12s | %-24s | %-18s | Floor %-2d",
+                        i, r.getRoomId(), staff, r.getCurrentStatus(), r.getRoomType(), r.getFloorNumber()));
+            }
+            System.out.println("--------------------------------------------------------------------------------------------------");
+        }
+
+        // Display Matched Housekeeping Tasks Table
+        if (!matchedTasks.isEmpty()) {
+            System.out.println("\n--- [ 2. HOUSEKEEPING TASK & WORKFLOW RECORDS ] ---");
+            System.out.println(String.format("%-10s | %-10s | %-12s | %-22s | %-20s | %-10s | %-12s", 
+                    "Task ID", "Room ID", "Staff ID", "Current Status", "Last Updated", "Rollbacks", "Task State"));
+            System.out.println("----------------------------------------------------------------------------------------------------------------------");
+            for (int i = 1; i <= matchedTasks.getNumberOfEntries(); i++) {
+                HousekeepingTask task = matchedTasks.getEntry(i);
+                String lifecycle = "Archived".equalsIgnoreCase(task.getCurrentStatus()) ? "[ARCHIVED]" : "[ACTIVE]";
+                System.out.println(String.format("%-10s | %-10s | %-12s | %-22s | %-20s | %-10d | %-12s",
+                        task.getTaskId(), task.getRoomId(), task.getStaffId(), task.getCurrentStatus(), task.getLastUpdated(), task.getRollbackCount(), lifecycle));
+            }
+            System.out.println("----------------------------------------------------------------------------------------------------------------------");
+        }
+
+        // Display Status History Log Trace Stack if a room or active task is inspected
+        HousekeepingTask targetActiveTask = null;
+        if (matchedRooms.getNumberOfEntries() == 1) {
+            targetActiveTask = findActiveTaskByRoomId(matchedRooms.getEntry(1).getRoomId());
+        } else if (matchedTasks.getNumberOfEntries() == 1) {
+            targetActiveTask = matchedTasks.getEntry(1);
+        }
+
+        if (targetActiveTask != null) {
+            StackInterface<TaskStatusHistory> stack = targetActiveTask.getHistoryStack();
+            if (stack != null && !stack.isEmpty()) {
+                System.out.println("\n--- [ 3. STATUS HISTORY LOG TRACE (STACK ADT) FOR ACTIVE " + targetActiveTask.getTaskId() + " (" + targetActiveTask.getRoomId() + ") ] ---");
+                System.out.println(stack.toString().trim());
+                System.out.println("--------------------------------------------------------------------------------------------------");
+            }
+        }
+
         ui.pressEnterToContinue();
     }
 
@@ -739,13 +1037,14 @@ public class HousekeepingControl {
         long totalTurnaroundMinutes = 0;
         int completedTurnaroundCount = 0;
 
-        System.out.println(String.format("%-6s | %-8s | %-18s | %-22s | %-10s", "No.", "Room ID", "Room Type", "Current Status", "Staff ID"));
+        System.out.println(String.format("%-6s | %-8s | %-18s | %-24s | %-12s", "No.", "Room ID", "Room Type", "Current Status", "Staff ID"));
         System.out.println("--------------------------------------------------------------------------");
 
         for (int i = 1; i <= reportRooms.getNumberOfEntries(); i++) {
             Room r = reportRooms.getEntry(i);
-            System.out.println(String.format("%-6d | %-8s | %-18s | %-22s | %-10s",
-                    i, r.getRoomId(), r.getRoomType(), r.getCurrentStatus(), r.getAssignedStaffId()));
+            String staff = (r.getAssignedStaffId() == null || r.getAssignedStaffId().trim().isEmpty()) ? "UNASSIGNED" : r.getAssignedStaffId();
+            System.out.println(String.format("%-6d | %-8s | %-18s | %-24s | %-12s",
+                    i, r.getRoomId(), r.getRoomType(), r.getCurrentStatus(), staff));
 
             switch (r.getCurrentStatus()) {
                 case "Dirty": dirtyCount++; break;
@@ -810,13 +1109,14 @@ public class HousekeepingControl {
         int totalRollbacks = 0;
         int highExceptionTasks = 0;
 
-        System.out.println(String.format("%-8s | %-6s | %-8s | %-22s | %-12s", "Task ID", "Room", "Staff", "Current Status", "Rollbacks"));
+        System.out.println(String.format("%-10s | %-8s | %-12s | %-24s | %-10s", "Task ID", "Room ID", "Staff ID", "Current Status", "Rollbacks"));
         System.out.println("--------------------------------------------------------------------------");
 
         for (int i = 1; i <= auditTasks.getNumberOfEntries(); i++) {
             HousekeepingTask t = auditTasks.getEntry(i);
-            System.out.println(String.format("%-8s | %-6s | %-8s | %-22s | %-12d",
-                    t.getTaskId(), t.getRoomId(), t.getStaffId(), t.getCurrentStatus(), t.getRollbackCount()));
+            String staff = (t.getStaffId() == null || t.getStaffId().trim().isEmpty()) ? "UNASSIGNED" : t.getStaffId();
+            System.out.println(String.format("%-10s | %-8s | %-12s | %-24s | %-10d",
+                    t.getTaskId(), t.getRoomId(), staff, t.getCurrentStatus(), t.getRollbackCount()));
             totalRollbacks += t.getRollbackCount();
             if (t.getRollbackCount() > 1) {
                 highExceptionTasks++;
@@ -888,10 +1188,13 @@ public class HousekeepingControl {
         return null;
     }
 
+    /**
+     * Rule 1 Helper: Finds the single active (non-Archived) housekeeping task for a room.
+     */
     private HousekeepingTask findActiveTaskByRoomId(String roomId) {
         for (int i = taskList.getNumberOfEntries(); i >= 1; i--) {
             HousekeepingTask t = taskList.getEntry(i);
-            if (t.getRoomId().equalsIgnoreCase(roomId)) {
+            if (t.getRoomId().equalsIgnoreCase(roomId) && !"Archived".equalsIgnoreCase(t.getCurrentStatus())) {
                 return t;
             }
         }

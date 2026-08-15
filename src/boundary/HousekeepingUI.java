@@ -77,9 +77,12 @@ public class HousekeepingUI {
         System.out.print("Select Choice [1-3]: ");
         String choice = scanner.hasNextLine() ? scanner.nextLine().trim() : "1";
         switch (choice) {
-            case "2": return "Deluxe Room";
-            case "3": return "Suite Room";
-            default: return "Standard Room";
+            case "2":
+                return "Deluxe Room";
+            case "3":
+                return "Suite Room";
+            default:
+                return "Standard Room";
         }
     }
 
@@ -103,7 +106,7 @@ public class HousekeepingUI {
         System.out.println(" Workflow: [Dirty] -> [Cleaning In Progress] -> [Inspected] -> [Ready for Check-In]");
         System.out.println("--------------------------------------------------------------------------");
         System.out.println("Select New Status Step:");
-        
+
         if (status.contains("dirty")) {
             System.out.println(" [1] Cleaning In Progress  <-- (RECOMMENDED NEXT STEP)");
             System.out.println(" [2] Inspected");
@@ -151,8 +154,34 @@ public class HousekeepingUI {
         return false;
     }
 
+    public int selectRollbackScenario() {
+        System.out.println("\n--------------------------------------------------------------------------");
+        System.out.println(" SELECT ROLLBACK SCENARIO (CUSTOM LINKEDSTACK ADT)");
+        System.out.println("--------------------------------------------------------------------------");
+        System.out.println(" [1] Late Check-Out (Revert Room to 'Occupied')");
+        System.out.println(" [2] Undo Status (Revert to Immediate Previous Log)");
+        System.out.println(" [0] Cancel Operation");
+        System.out.print("Select Choice [0-2]: ");
+        if (scanner.hasNextLine()) {
+            try {
+                return Integer.parseInt(scanner.nextLine().trim());
+            } catch (NumberFormatException e) {
+                return -1;
+            }
+        }
+        return 0;
+    }
+
     public String inputReason() {
         System.out.print("Enter Reason / Note (e.g., 'Late Check-out', 'Incorrect Input') [Press ENTER for default]: ");
+        if (scanner.hasNextLine()) {
+            return scanner.nextLine().trim();
+        }
+        return "";
+    }
+
+    public String inputCorrectionReason() {
+        System.out.print("Enter Reason / Note [Press ENTER for default: 'Supervisor status input correction']: ");
         if (scanner.hasNextLine()) {
             return scanner.nextLine().trim();
         }
@@ -189,18 +218,21 @@ public class HousekeepingUI {
     }
 
     public static void displayRoomTable(adt.ListInterface<entity.Room> roomList) {
-        System.out.println(String.format("%-6s | %-10s | %-12s | %-24s | %-18s | %-8s", 
+        System.out.println(String.format("%-6s | %-10s | %-12s | %-24s | %-18s | %-8s",
                 "No.", "Room ID", "Staff ID", "Current Status", "Room Type", "Floor"));
-        System.out.println("--------------------------------------------------------------------------------------------------");
+        System.out.println(
+                "--------------------------------------------------------------------------------------------------");
         if (roomList != null) {
             for (int i = 1; i <= roomList.getNumberOfEntries(); i++) {
                 entity.Room r = roomList.getEntry(i);
-                String staff = (r.getAssignedStaffId() == null || r.getAssignedStaffId().trim().isEmpty()) ? "Unassigned" : r.getAssignedStaffId();
+                String staff = (r.getAssignedStaffId() == null || r.getAssignedStaffId().trim().isEmpty())
+                        ? "Unassigned"
+                        : r.getAssignedStaffId();
                 System.out.println(String.format("%-6d | %-10s | %-12s | %-24s | %-18s | Floor %-2d",
                         i, r.getRoomId(), staff, r.getCurrentStatus(), r.getRoomType(), r.getFloorNumber()));
             }
         }
-        System.out.println("--------------------------------------------------------------------------------------------------");
+        System.out.println(
+                "--------------------------------------------------------------------------------------------------");
     }
 }
-
