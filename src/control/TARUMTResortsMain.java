@@ -17,7 +17,7 @@ public class TARUMTResortsMain {
     private MainSystemUI mainUI = new MainSystemUI();
     private WalkInBookingControl walkInControl = new WalkInBookingControl();
     private HousekeepingControl housekeepingControl = new HousekeepingControl();
-    private FrontDeskController frontDeskController = new FrontDeskController();
+    private FrontDeskControl frontDeskControl = new FrontDeskControl();
 
     public void runMainSystem() {
         int choice;
@@ -28,7 +28,7 @@ public class TARUMTResortsMain {
                     walkInControl.runWalkInBookingSystem();
                     break;
                 case 2:
-                    frontDeskController.run();
+                    frontDeskControl.runFrontDeskSystem();
                     break;
                 case 3:
                     // Launches User's Housekeeping and Task Log Subsystem

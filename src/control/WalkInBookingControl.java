@@ -46,11 +46,24 @@ public class WalkInBookingControl {
     }
 
     private void initDefaultRooms() {
-        roomList.add(new Room("R101", "Standard", 1, "Ready for Check-In", "ST101"));
-        roomList.add(new Room("R102", "Standard", 1, "Ready for Check-In", "ST102"));
-        roomList.add(new Room("R201", "Deluxe", 2, "Ready for Check-In", "ST101"));
-        roomList.add(new Room("R202", "Deluxe", 2, "Dirty", "ST103"));
-        roomList.add(new Room("R301", "Suite", 3, "Ready for Check-In", "ST104"));
+        // Floor 1: 1 Suite Room, 2 Deluxe Rooms, 2 Standard Rooms
+        roomList.add(new Room("R101", "Suite Room",    1, "Dirty",             "ST101"));
+        roomList.add(new Room("R102", "Deluxe Room",   1, "Cleaning In Progress", "ST102"));
+        roomList.add(new Room("R103", "Deluxe Room",   1, "Inspected",         "ST103"));
+        roomList.add(new Room("R104", "Standard Room", 1, "Ready for Check-In","ST104"));
+        roomList.add(new Room("R105", "Standard Room", 1, "Ready for Check-In","ST105"));
+        // Floor 2: 1 Suite Room, 2 Deluxe Rooms, 2 Standard Rooms
+        roomList.add(new Room("R201", "Suite Room",    2, "Dirty",             "ST201"));
+        roomList.add(new Room("R202", "Deluxe Room",   2, "Cleaning In Progress", "ST202"));
+        roomList.add(new Room("R203", "Deluxe Room",   2, "Inspected",         "ST203"));
+        roomList.add(new Room("R204", "Standard Room", 2, "Ready for Check-In","ST204"));
+        roomList.add(new Room("R205", "Standard Room", 2, "Ready for Check-In","ST205"));
+        // Floor 3: 1 Suite Room, 2 Deluxe Rooms, 2 Standard Rooms
+        roomList.add(new Room("R301", "Suite Room",    3, "Dirty",             "ST301"));
+        roomList.add(new Room("R302", "Deluxe Room",   3, "Cleaning In Progress", "ST302"));
+        roomList.add(new Room("R303", "Deluxe Room",   3, "Inspected",         "ST303"));
+        roomList.add(new Room("R304", "Standard Room", 3, "Ready for Check-In","ST304"));
+        roomList.add(new Room("R305", "Standard Room", 3, "Ready for Check-In","ST305"));
         housekeepingDAO.saveRoomsToFile(roomList);
     }
 
@@ -83,6 +96,12 @@ public class WalkInBookingControl {
     }
 
     public void runWalkInBookingSystem() {
+        // Reload latest room data from shared rooms.dat each time subsystem is entered
+        // so changes made by Housekeeping or Front-Desk are reflected
+        ListInterface<Room> latestRooms = housekeepingDAO.retrieveRoomsFromFile();
+        if (latestRooms != null && !latestRooms.isEmpty()) {
+            roomList = latestRooms;
+        }
         int choice;
         do {
             choice = ui.getMenuChoice();
