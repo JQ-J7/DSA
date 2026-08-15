@@ -301,10 +301,10 @@ public class FrontDeskControl {
 
         boolean showAll = "ALL".equalsIgnoreCase(filterType);
 
-        System.out.println("\n==========================================================================================================================");
-        System.out.printf("  %-8s | %-16s | %-6s | %-12s | %-22s | %-16s | %-26s%n",
-                "Room ID", "Room Type", "Floor", "Nightly Rate", "System Status", "Availability", "Occupant / Pipeline Note");
-        System.out.println("--------------------------------------------------------------------------------------------------------------------------");
+        System.out.println("\n================================================================================================================");
+        System.out.printf("  %-8s | %-16s | %-8s | %-14s | %-22s | %-30s%n",
+                "Room ID", "Room Type", "Floor", "Nightly Rate", "Status", "Occupant / Notes");
+        System.out.println("----------------------------------------------------------------------------------------------------------------");
 
         int totalCount = 0;
         int readyCount = 0;
@@ -327,16 +327,13 @@ public class FrontDeskControl {
             String status = r.getCurrentStatus();
             double rate = getRateForRoomType(r.getRoomType());
 
-            String availLabel;
             String occupantNote = "-";
 
             if ("Ready for Check-In".equalsIgnoreCase(status)) {
-                availLabel = "[AVAILABLE NOW]";
                 occupantNote = "Ready for Immediate Check-In";
                 readyCount++;
                 if (floor >= 1 && floor <= 3) readyPerFloor[floor]++;
             } else if ("Occupied".equalsIgnoreCase(status)) {
-                availLabel = "[OCCUPIED]";
                 occupiedCount++;
                 Reservation activeRes = findReservationByRoomId(r.getRoomId());
                 if (activeRes != null) {
@@ -345,41 +342,40 @@ public class FrontDeskControl {
                     occupantNote = "In-House Guest";
                 }
             } else if ("Cleaning In Progress".equalsIgnoreCase(status)) {
-                availLabel = "[CLEANING]";
                 cleaningCount++;
                 occupantNote = "Cleaning by " + r.getAssignedStaffId();
             } else if ("Inspected".equalsIgnoreCase(status)) {
-                availLabel = "[INSPECTED]";
                 inspectedCount++;
                 occupantNote = "Awaiting Final Release";
             } else if ("Dirty".equalsIgnoreCase(status)) {
-                availLabel = "[DIRTY]";
                 dirtyCount++;
                 occupantNote = "Pending Housekeeping Clean";
             } else {
-                availLabel = "[" + status.toUpperCase() + "]";
                 occupantNote = "Status: " + status;
             }
 
-            System.out.printf("  %-8s | %-16s | Floor %-1d | RM %-9.2f | %-22s | %-16s | %-26s%n",
-                    r.getRoomId(), r.getRoomType(), floor, rate, status, availLabel, occupantNote);
+            System.out.printf("  %-8s | %-16s | %-8s | %-14s | %-22s | %-30s%n",
+                    r.getRoomId(),
+                    r.getRoomType(),
+                    "Floor " + floor,
+                    String.format("RM %.2f", rate),
+                    status,
+                    occupantNote);
         }
 
-        System.out.println("==========================================================================================================================");
+        System.out.println("================================================================================================================");
 
         // Summary Breakdown Card
         String categoryName = showAll ? "All Room Types (Full Resort Overview)" : filterType;
-        double availPct = totalCount > 0 ? (readyCount * 100.0 / totalCount) : 0.0;
-        double occPct   = totalCount > 0 ? (occupiedCount * 100.0 / totalCount) : 0.0;
         int pipelineTotal = dirtyCount + cleaningCount + inspectedCount;
 
         System.out.println("\n  ROOM AVAILABILITY & INVENTORY SUMMARY:");
         System.out.println("  -----------------------------------------------------------------");
-        System.out.printf("  Target Category       : %s%n", categoryName);
-        System.out.printf("  Total Rooms in Scope  : %d room(s)%n", totalCount);
-        System.out.printf("  • Ready for Check-In  : %d room(s)  [ %.1f%% AVAILABLE ]%n", readyCount, availPct);
-        System.out.printf("  • Occupied by Guests  : %d room(s)  [ %.1f%% OCCUPIED ]%n", occupiedCount, occPct);
-        System.out.printf("  • Housekeeping Pipeline : %d room(s)  [ %d Dirty | %d Cleaning In Progress | %d Inspected ]%n",
+        System.out.printf("  Target Category         : %s%n", categoryName);
+        System.out.printf("  Total Rooms in Scope    : %d room(s)%n", totalCount);
+        System.out.printf("  - Ready for Check-In    : %d room(s)%n", readyCount);
+        System.out.printf("  - Occupied by Guests    : %d room(s)%n", occupiedCount);
+        System.out.printf("  - Housekeeping Pipeline : %d room(s)  [ %d Dirty | %d Cleaning In Progress | %d Inspected ]%n",
                 pipelineTotal, dirtyCount, cleaningCount, inspectedCount);
         System.out.println("  -----------------------------------------------------------------");
 
@@ -387,15 +383,7 @@ public class FrontDeskControl {
         System.out.printf("  - Floor 1 : %d ready room(s)%n", readyPerFloor[1]);
         System.out.printf("  - Floor 2 : %d ready room(s)%n", readyPerFloor[2]);
         System.out.printf("  - Floor 3 : %d ready room(s)%n", readyPerFloor[3]);
-
-        System.out.println("\n  Front-Desk Agent Status:");
-        if (readyCount > 0) {
-            System.out.printf("  [OK] %d room(s) can be assigned IMMEDIATELY to incoming walk-in guests.%n", readyCount);
-        } else if (inspectedCount > 0) {
-            System.out.printf("  [!] 0 rooms ready now, but %d inspected room(s) will be available shortly.%n", inspectedCount);
-        } else {
-            System.out.println("  [!] No rooms currently ready. Incoming walk-in guests must join the waiting queue.");
-        }
+        System.out.println("  -----------------------------------------------------------------");
 
         ui.pressEnterToContinue();
     }
@@ -444,10 +432,9 @@ public class FrontDeskControl {
     private Reservation findReservationPrompt(String actionTitle, boolean onlyCheckedIn) {
         System.out.println("Find Reservation By:");
         System.out.println("  [1] Confirmation Number (8-digit)");
-        System.out.println("  [2] Guest Name");
-        System.out.println("  [3] IC Number");
+        System.out.println("  [2] Guest Name or IC Number");
         System.out.println("  [0] Cancel");
-        int lookupChoice = ui.inputInt("Select [0-3]: ");
+        int lookupChoice = ui.inputInt("Select [0-2]: ");
 
         if (lookupChoice == 1) {
             String confNum = ui.inputConfirmationNumber();
@@ -466,9 +453,8 @@ public class FrontDeskControl {
             }
             return res;
 
-        } else if (lookupChoice == 2 || lookupChoice == 3) {
-            String label = (lookupChoice == 2) ? "Guest Name" : "IC Number";
-            String query = ui.inputText("Enter " + label + " to search (or [0] to cancel): ").trim();
+        } else if (lookupChoice == 2) {
+            String query = ui.inputGuestSearchQuery();
             if (query.isEmpty() || "0".equals(query)) { ui.displayMessage("Operation cancelled."); return null; }
 
             Object[] allRes = reservationsMap.values();
@@ -476,9 +462,8 @@ public class FrontDeskControl {
             for (Object obj : allRes) {
                 Reservation r = (Reservation) obj;
                 if (onlyCheckedIn && !"Checked-In".equalsIgnoreCase(r.getStatus())) continue;
-                if (lookupChoice == 2 && r.getGuest().getName().toLowerCase().contains(query.toLowerCase())) {
-                    matches.add(r);
-                } else if (lookupChoice == 3 && r.getGuest().getIcNumber().contains(query)) {
+                if (r.getGuest().getName().toLowerCase().contains(query.toLowerCase()) ||
+                    r.getGuest().getIcNumber().contains(query)) {
                     matches.add(r);
                 }
             }
@@ -492,13 +477,13 @@ public class FrontDeskControl {
             if (matches.size() == 1) {
                 return matches.get(0);
             } else {
-                System.out.println("\nMultiple guests found:");
-                System.out.printf("%-4s | %-10s | %-20s | %-14s | %-6s%n",
+                System.out.println("\nMultiple matching guests found:");
+                System.out.printf("  %-4s | %-10s | %-20s | %-14s | %-6s%n",
                         "No.", "Conf. No.", "Guest Name", "IC Number", "Room");
-                System.out.println("----------------------------------------------------------");
+                System.out.println("  ----------------------------------------------------------");
                 for (int i = 0; i < matches.size(); i++) {
                     Reservation r = matches.get(i);
-                    System.out.printf("%-4d | %-10s | %-20s | %-14s | %-6s%n",
+                    System.out.printf("  %-4d | %-10s | %-20s | %-14s | %-6s%n",
                             i + 1, r.getConfirmationNumber(),
                             r.getGuest().getName(), r.getGuest().getIcNumber(),
                             r.getRoom().getRoomId());
