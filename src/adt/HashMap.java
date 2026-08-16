@@ -1,7 +1,6 @@
 package adt;
 
 import java.io.Serializable;
-import java.util.Arrays;
 
 /**
  * HashMap implementation of MapInterface.
